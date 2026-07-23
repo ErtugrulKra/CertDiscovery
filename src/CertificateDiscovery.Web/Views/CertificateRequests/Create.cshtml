@@ -1,0 +1,143 @@
+@model CertificateDiscovery.Web.Models.CertificateRequestCreateViewModel
+@using CertificateDiscovery.Domain
+@{
+    ViewData["Title"] = "New Certificate Request";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>New Certificate Request</h2>
+        <div class="text-muted">Create a manual DNS-01 ACME request and choose where the certificate will be stored in Vault.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+</div>
+
+<form method="post" class="asset-form">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-12">
+            <label class="form-label" asp-for="Request.RequestType">Request mode</label>
+            <select class="form-select" asp-for="Request.RequestType" asp-items="Html.GetEnumSelectList<CertificateRequestType>()"></select>
+            <div class="form-text">Wildcard mode creates *.domain plus the root domain automatically and always uses DNS-01.</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.Domain" id="domainLabel">Primary domain</label>
+            <input class="form-control" asp-for="Request.Domain" placeholder="example.com" />
+            <div class="form-text" id="domainHelp">For wildcard mode enter the base domain, for example example.com.</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.SubjectAlternativeNames">Subject Alternative Names</label>
+            <input class="form-control" asp-for="Request.SubjectAlternativeNames" placeholder="www.example.com" />
+            <div class="form-text" id="sanHelp">Comma or newline separated DNS names.</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.AcmeProviderId">ACME provider</label>
+            <select class="form-select" asp-for="Request.AcmeProviderId">
+                <option value="">Select provider</option>
+                @foreach (var provider in Model.Options.AcmeProviders)
+                {
+                    <option value="@provider.Id">@provider.Name (@(provider.IsStaging ? "staging" : "production"))</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.VaultServerId">Vault server</label>
+            <select class="form-select" asp-for="Request.VaultServerId">
+                <option value="">Select Vault</option>
+                @foreach (var vault in Model.Options.VaultServers)
+                {
+                    <option value="@vault.Id">@vault.Name (@vault.BaseUrl)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.DnsProviderId">DNS provider</label>
+            <select class="form-select" asp-for="Request.DnsProviderId">
+                <option value="">Manual TXT only</option>
+                @foreach (var provider in Model.Options.DnsProviders)
+                {
+                    <option value="@provider.Id">@provider.Name (@provider.ProviderType / @provider.ZoneName)</option>
+                }
+            </select>
+            <div class="form-text">Select Cloudflare to publish TXT records automatically after challenge creation.</div>
+        </div>
+        <div class="col-12">
+            <label class="form-label" asp-for="Request.VaultSecretPath">Vault KV secret path</label>
+            <input class="form-control" asp-for="Request.VaultSecretPath" placeholder="secret/certificates/example.com" />
+            <div class="form-text">KV v2 format: mount/path. Example: secret/certificates/example.com</div>
+        </div>
+        <div class="col-12">
+            <div class="form-check form-switch">
+                <input class="form-check-input" asp-for="Request.ScheduleCheck" />
+                <label class="form-check-label" asp-for="Request.ScheduleCheck">ScheduleCheck</label>
+            </div>
+        </div>
+        <div class="col-md-6 scheduled-renewal-field">
+            <label class="form-label" asp-for="Request.ThresholdDays">Threshold</label>
+            <div class="input-group">
+                <input class="form-control" asp-for="Request.ThresholdDays" type="number" min="1" max="365" />
+                <span class="input-group-text">days</span>
+            </div>
+            <div class="form-text">Renew automatically when the current certificate has this many days or less remaining.</div>
+        </div>
+        <div class="col-md-6 scheduled-renewal-field">
+            <label class="form-label" asp-for="Request.CronExpression">CRON</label>
+            <input class="form-control font-monospace" asp-for="Request.CronExpression" placeholder="0 0 * * *" />
+            <div class="form-text">Five-field cron. Default: every day at 00:00 server time.</div>
+        </div>
+    </div>
+    <hr />
+    <button class="btn btn-primary">Create Request</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>
+
+<section class="panel mt-3">
+    <div class="panel-header"><h2>Before You Start</h2></div>
+    <div class="panel-body">
+        <p class="mb-2">Use a staging ACME provider first. After the DNS-01 challenge is created, add the shown TXT record in your DNS provider and wait for propagation.</p>
+        <p class="mb-0">The issued certificate, private key and full chain will be written to Vault KV v2 at the selected path.</p>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        (() => {
+            const mode = document.getElementById("Request_RequestType");
+            const domain = document.getElementById("Request_Domain");
+            const sans = document.getElementById("Request_SubjectAlternativeNames");
+            const domainLabel = document.getElementById("domainLabel");
+            const domainHelp = document.getElementById("domainHelp");
+            const sanHelp = document.getElementById("sanHelp");
+            const scheduleCheck = document.getElementById("Request_ScheduleCheck");
+            const scheduledFields = [...document.querySelectorAll(".scheduled-renewal-field")];
+
+            function baseDomain(value) {
+                return (value || "").trim().replace(/^\*\./, "").replace(/\.$/, "").toLowerCase();
+            }
+
+            function syncWildcardText() {
+                const wildcard = mode.value === "Wildcard";
+                domainLabel.textContent = wildcard ? "Base domain" : "Primary domain";
+                domainHelp.textContent = wildcard
+                    ? "Enter example.com; the request will be issued for *.example.com and example.com."
+                    : "Enter the primary DNS name for the certificate.";
+                sanHelp.textContent = wildcard
+                    ? "Optional extra SAN names. The base domain is added automatically."
+                    : "Comma or newline separated DNS names.";
+                if (wildcard && !sans.value.trim() && baseDomain(domain.value)) {
+                    sans.placeholder = baseDomain(domain.value);
+                } else {
+                    sans.placeholder = wildcard ? "api.example.com" : "www.example.com";
+                }
+            }
+
+            mode.addEventListener("change", syncWildcardText);
+            domain.addEventListener("input", syncWildcardText);
+            scheduleCheck.addEventListener("change", () => {
+                scheduledFields.forEach((field) => field.classList.toggle("d-none", !scheduleCheck.checked));
+            });
+            syncWildcardText();
+            scheduledFields.forEach((field) => field.classList.toggle("d-none", !scheduleCheck.checked));
+        })();
+    </script>
+}

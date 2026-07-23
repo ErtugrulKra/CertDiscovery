@@ -1,0 +1,74 @@
+@model CertificateDiscovery.Domain.Entities.VaultDiscoveryJob
+@{
+    ViewData["Title"] = "Vault Discovery Detail";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>@Model.Name</h2>
+        <div class="text-muted">@Model.VaultServer.Name <code>@Model.KvMountPath/@Model.BasePath</code></div>
+    </div>
+    <div class="toolbar">
+        @if (User.IsInRole("Admin"))
+        {
+            <form method="post" asp-action="Run" asp-route-id="@Model.Id" class="d-inline">
+                <button class="btn btn-primary btn-sm" disabled="@(Model.Status == CertificateDiscovery.Domain.ScanJobStatus.Running)">Run Again</button>
+            </form>
+        }
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+    </div>
+</div>
+
+@if (TempData["VaultDiscoveryMessage"] is string message)
+{
+    <div class="alert alert-success">@message</div>
+}
+@if (TempData["VaultDiscoveryError"] is string error)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<div class="metric-grid">
+    <div class="metric"><span>Status</span><strong class="fs-4">@Model.Status</strong><small>@Model.RequestedBy</small></div>
+    <div class="metric"><span>Secrets</span><strong>@Model.SecretCount</strong><small>scanned KV entries</small></div>
+    <div class="metric"><span>Certificates</span><strong>@Model.CertificateFoundCount</strong><small>imported or updated</small></div>
+    <div class="metric"><span>Assets</span><strong>@Model.AssetCreatedCount</strong><small>created from DNS names</small></div>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Vault Secrets</h2>
+        <span class="text-muted">@Model.Results.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Secret Path</th><th>Status</th><th>Domain</th><th>SANs</th><th>Certificate</th><th>Fingerprint</th><th>Expires</th><th>Asset</th><th>Error</th></tr></thead>
+            <tbody>
+            @foreach (var result in Model.Results.OrderByDescending(x => x.CertificateId != null).ThenBy(x => x.SecretPath))
+            {
+                <tr>
+                    <td><code>@result.SecretPath</code></td>
+                    <td><span class="badge @(result.Status == CertificateDiscovery.Domain.ScanResultStatus.Success ? "status-online" : "status-neutral")">@result.Status</span></td>
+                    <td>@result.Domain</td>
+                    <td class="truncate">@result.SubjectAlternativeNames</td>
+                    <td>
+                        @if (result.CertificateId is not null)
+                        {
+                            <a asp-controller="Certificates" asp-action="Details" asp-route-id="@result.CertificateId">@result.Certificate?.CommonName</a>
+                        }
+                    </td>
+                    <td><code>@(result.Certificate?.FingerprintSha256?[..Math.Min(16, result.Certificate.FingerprintSha256.Length)])</code></td>
+                    <td>@(result.Certificate?.NotAfterUtc.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>
+                        @if (result.PromotedAssetId is not null)
+                        {
+                            <a asp-controller="Assets" asp-action="Details" asp-route-id="@result.PromotedAssetId">@result.PromotedAsset?.Name</a>
+                        }
+                    </td>
+                    <td class="text-danger small">@result.ErrorMessage</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

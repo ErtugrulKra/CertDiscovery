@@ -1,0 +1,58 @@
+@model IReadOnlyList<CertificateDiscovery.Contracts.AssetDto>
+@{
+    ViewData["Title"] = "Assets";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Asset Inventory</h2>
+        <div class="text-muted">@Model.Count endpoints in scope</div>
+    </div>
+    @if (User.IsInRole("Admin"))
+    {
+        <a class="btn btn-primary btn-sm" asp-action="Create">New Asset</a>
+    }
+</div>
+
+<form class="filter-bar row g-2" method="get">
+    <div class="col-md-3"><input class="form-control form-control-sm" name="owner" placeholder="Owner" /></div>
+    <div class="col-md-3"><input class="form-control form-control-sm" name="expiresWithinDays" type="number" placeholder="Expire days" /></div>
+    <div class="col-md-3"><select class="form-select form-select-sm" name="isEnabled"><option value="">Enabled?</option><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+    <div class="col-md-3"><button class="btn btn-outline-secondary btn-sm w-100">Apply filters</button></div>
+</form>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Assets</h2>
+        <span class="text-muted">Manual scan actions are queued as jobs</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>Endpoint</th><th>Environment</th><th>Owner</th><th>Enabled</th><th>Last Scan</th><th>Certificate</th><th>Expires</th><th>Days</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var asset in Model)
+            {
+                <tr>
+                    <td><a asp-action="Details" asp-route-id="@asset.Id">@asset.Name</a></td>
+                    <td><code>@asset.Protocol://@asset.Host:@asset.Port</code></td>
+                    <td>@asset.Environment</td>
+                    <td>@asset.Owner</td>
+                    <td><span class="badge @(asset.IsEnabled ? "status-online" : "status-neutral")">@(asset.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                    <td>@(asset.LastScanAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>@asset.ActiveCertificate?.CommonName</td>
+                    <td>@(asset.ActiveCertificate?.NotAfterUtc.ToLocalTime().ToString("d") ?? "-")</td>
+                    <td>@(asset.ActiveCertificate?.RemainingDays.ToString() ?? "-")</td>
+                    <td class="text-end">
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <a class="btn btn-outline-secondary btn-sm" asp-action="Edit" asp-route-id="@asset.Id">Edit</a>
+                            <form class="d-inline" method="post" asp-action="Scan" asp-route-id="@asset.Id"><button class="btn btn-outline-primary btn-sm">Scan</button></form>
+                            <form class="d-inline" method="post" asp-action="Toggle" asp-route-id="@asset.Id"><button class="btn btn-outline-warning btn-sm">Toggle</button></form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

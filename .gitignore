@@ -1,0 +1,84 @@
+# Build outputs
+bin/
+obj/
+artifacts/
+TestResults/
+coverage/
+coverage.*
+*.trx
+*.coverage
+*.coveragexml
+
+# .NET local caches and user files
+.dotnet-home/
+.nuget/
+*.user
+*.suo
+*.rsuser
+*.userosscache
+*.sln.docstates
+
+# IDEs and editors
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python environments and caches
+.venv/
+venv/
+env/
+ENV/
+workers/**/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+.coverage
+htmlcov/
+
+# Docker and local runtime state
+.appdata/
+.localappdata/
+.config/*
+!.config/dotnet-tools.json
+.keys/
+*.pid
+
+# Logs and diagnostics
+*.log
+logs/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local SQLite databases and runtime sidecars
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Internal documentation
+*.docx
+
+# Keep repository placeholder files when needed
+!.gitkeep

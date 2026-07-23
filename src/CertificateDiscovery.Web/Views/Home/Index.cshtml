@@ -1,0 +1,99 @@
+@model CertificateDiscovery.Contracts.DashboardDto
+@{
+    ViewData["Title"] = "Dashboard";
+    string StatusClass(object status)
+    {
+        var value = status.ToString()?.ToLowerInvariant() ?? "";
+        return value switch
+        {
+            "healthy" => "status-healthy",
+            "expired" => "status-expired",
+            "critical" => "status-critical",
+            "warning" => "status-warning",
+            "attention" => "status-attention",
+            "online" => "status-online",
+            _ => "status-neutral"
+        };
+    }
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Certificate Operations</h2>
+        <div class="text-muted">Last scan: @(Model.LastScanAtUtc?.ToLocalTime().ToString("g") ?? "Never")</div>
+    </div>
+    <div class="toolbar">
+        <a class="btn btn-outline-secondary btn-sm" asp-controller="ScanJobs" asp-action="Index">Scan Jobs</a>
+        @if (User.IsInRole("Admin"))
+        {
+            <a class="btn btn-primary btn-sm" asp-controller="Assets" asp-action="Create">New Asset</a>
+        }
+    </div>
+</div>
+
+<div class="metric-grid">
+    <div class="metric"><span>Total Assets</span><strong>@Model.TotalAssets</strong><small>Inventory scope</small></div>
+    <div class="metric"><span>Active Assets</span><strong>@Model.ActiveAssets</strong><small>Eligible for scheduled scans</small></div>
+    <div class="metric"><span>Certificates</span><strong>@Model.TotalCertificates</strong><small>Unique SHA-256 fingerprints</small></div>
+    <div class="metric"><span>Expired</span><strong>@Model.ExpiredCertificates</strong><small>Past NotAfter date</small></div>
+    <div class="metric"><span>0-@Model.CriticalThresholdDays Days</span><strong>@Model.ExpiringIn7Days</strong><small>Critical renewal window</small></div>
+    <div class="metric"><span>0-@Model.WarningThresholdDays Days</span><strong>@Model.ExpiringIn30Days</strong><small>Warning renewal window</small></div>
+    <div class="metric"><span>0-@Model.AttentionThresholdDays Days</span><strong>@Model.ExpiringIn60Days</strong><small>Attention renewal window</small></div>
+    <div class="metric"><span>Last Result</span><strong>@Model.LastScanSuccessCount / @Model.LastScanFailedCount</strong><small>Successful / failed assets</small></div>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Upcoming Expirations</h2>
+        <a asp-controller="Certificates" asp-action="Index">View all</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Common Name</th><th>Issuer</th><th>Expires</th><th>Days</th><th>Status</th><th>Assets</th></tr></thead>
+            <tbody>
+            @foreach (var cert in Model.UpcomingExpirations)
+            {
+                <tr>
+                    <td><a asp-controller="Certificates" asp-action="Details" asp-route-id="@cert.Id">@cert.CommonName</a></td>
+                    <td class="text-truncate truncate">@cert.Issuer</td>
+                    <td>@cert.NotAfterUtc.ToLocalTime().ToString("g")</td>
+                    <td>@cert.RemainingDays</td>
+                    <td><span class="badge @StatusClass(cert.Status)">@cert.Status</span></td>
+                    <td>@cert.AssetCount</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Worker Nodes</h2>
+        @if (User.IsInRole("Admin"))
+        {
+            <a asp-controller="WorkerNodes" asp-action="Index">Manage</a>
+        }
+        else
+        {
+            <span class="text-muted">@Model.Workers.Count active records</span>
+        }
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>Status</th><th>Heartbeat</th><th>Processed</th><th>Last Error</th></tr></thead>
+            <tbody>
+            @foreach (var worker in Model.Workers)
+            {
+                <tr>
+                    <td>@worker.WorkerName</td>
+                    <td><span class="badge @StatusClass(worker.Status)">@worker.Status</span></td>
+                    <td>@worker.LastHeartbeatAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>@worker.ProcessedJobCount</td>
+                    <td>@worker.LastError</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

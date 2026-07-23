@@ -1,0 +1,81 @@
+namespace CertificateDiscovery.Contracts;
+
+using CertificateDiscovery.Domain;
+
+public sealed record CertificateRequestListDto(
+    Guid Id,
+    string Domain,
+    string? SubjectAlternativeNames,
+    CertificateRequestStatus Status,
+    string AcmeProviderName,
+    string VaultServerName,
+    string VaultSecretPath,
+    string? DnsProviderName,
+    DateTime CreatedAtUtc,
+    DateTime? IssuedAtUtc,
+    DateTime? StoredAtUtc,
+    bool ScheduleCheck,
+    int RenewalThresholdDays,
+    string RenewalCronExpression,
+    DateTime? NextScheduleCheckAtUtc,
+    DateTime? LastScheduleCheckAtUtc,
+    string? LastScheduleCheckStatus,
+    string? LastScheduleCheckMessage,
+    Guid? LastRenewalRequestId,
+    string? ErrorMessage);
+
+public sealed record CertificateRequestDetailDto(
+    Guid Id,
+    string Domain,
+    IReadOnlyList<string> Domains,
+    string? SubjectAlternativeNames,
+    AcmeChallengeType ChallengeType,
+    CertificateRequestStatus Status,
+    Guid AcmeProviderId,
+    string AcmeProviderName,
+    Uri AcmeDirectoryUrl,
+    Guid VaultServerId,
+    string VaultServerName,
+    Guid? DnsProviderId,
+    string? DnsProviderName,
+    string VaultSecretPath,
+    string? DnsTxtName,
+    string? DnsTxtValue,
+    string? AcmeOrderLocation,
+    string? CertificatePem,
+    string? FullChainPem,
+    string? ErrorMessage,
+    DateTime? DnsPublishedAtUtc,
+    string? DnsPublishStatus,
+    string? DnsPublishError,
+    Guid? CertificateId,
+    DateTime CreatedAtUtc,
+    DateTime? ChallengeCreatedAtUtc,
+    DateTime? IssuedAtUtc,
+    DateTime? StoredAtUtc,
+    bool ScheduleCheck,
+    int RenewalThresholdDays,
+    string RenewalCronExpression,
+    DateTime? NextScheduleCheckAtUtc,
+    DateTime? LastScheduleCheckAtUtc,
+    string? LastScheduleCheckStatus,
+    string? LastScheduleCheckMessage,
+    Guid? RenewedFromRequestId,
+    Guid? LastRenewalRequestId);
+
+public sealed record CertificateRequestCreateOptionsDto(
+    IReadOnlyList<AcmeProviderDto> AcmeProviders,
+    IReadOnlyList<VaultServerDto> VaultServers,
+    IReadOnlyList<DnsProviderDto> DnsProviders);
+
+public sealed record CertificateRequestCreateRequest(
+    CertificateRequestType RequestType,
+    string Domain,
+    string? SubjectAlternativeNames,
+    Guid AcmeProviderId,
+    Guid VaultServerId,
+    Guid? DnsProviderId,
+    string VaultSecretPath,
+    bool ScheduleCheck,
+    int ThresholdDays,
+    string CronExpression);

@@ -1,0 +1,19 @@
+@using CertificateDiscovery.Domain
+<div class="row g-3">
+    <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="Name" value="@Model.Name" required /></div>
+    <div class="col-md-4"><label class="form-label">Host</label><input class="form-control" name="Host" value="@Model.Host" required /></div>
+    <div class="col-md-2"><label class="form-label">Port</label><input class="form-control" name="Port" type="number" min="1" max="65535" value="@Model.Port" required /></div>
+    <div class="col-md-2"><label class="form-label">Protocol</label><select class="form-select" name="Protocol" asp-items="Html.GetEnumSelectList<AssetProtocol>()"></select></div>
+    <div class="col-md-4"><label class="form-label">Environment</label><select class="form-select" name="Environment" asp-items="Html.GetEnumSelectList<AssetEnvironment>()"></select></div>
+    <div class="col-md-4"><label class="form-label">Asset Type</label><select class="form-select" name="AssetType" asp-items="Html.GetEnumSelectList<AssetType>()"></select></div>
+    <div class="col-md-4"><label class="form-label">Owner</label><input class="form-control" name="Owner" value="@Model.Owner" /></div>
+    <div class="col-md-4"><label class="form-label">SNI Host</label><input class="form-control" name="SniHost" value="@Model.SniHost" /></div>
+    <div class="col-md-4"><label class="form-label">Path</label><input class="form-control" name="Path" value="@Model.Path" /></div>
+    <div class="col-md-2"><label class="form-label">Interval Min</label><input class="form-control" name="ScanIntervalMinutes" type="number" min="1" value="@Model.ScanIntervalMinutes" /></div>
+    <div class="col-md-2"><label class="form-label">Timeout Sec</label><input class="form-control" name="TimeoutSeconds" type="number" min="1" max="120" value="@Model.TimeoutSeconds" /></div>
+    <div class="col-md-12"><label class="form-label">Description</label><textarea class="form-control" name="Description">@Model.Description</textarea></div>
+    <div class="col-md-8"><label class="form-label">Tags</label><input class="form-control" name="Tags" value="@Model.Tags" /></div>
+    <div class="col-md-4 d-flex align-items-end"><div class="form-check"><input class="form-check-input" name="IsEnabled" type="checkbox" value="true" checked="@Model.IsEnabled" /><label class="form-check-label">Enabled</label></div></div>
+</div>
+<input type="hidden" name="IsEnabled" value="false" />
+<hr />

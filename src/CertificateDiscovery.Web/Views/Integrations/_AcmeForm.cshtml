@@ -1,0 +1,51 @@
+@model CertificateDiscovery.Contracts.AcmeProviderUpsertRequest
+@using CertificateDiscovery.Domain
+
+<form method="post" class="asset-form">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Name">Name</label>
+            <input class="form-control" asp-for="Name" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="ProviderType">Provider type</label>
+            <select class="form-select" asp-for="ProviderType" asp-items="Html.GetEnumSelectList<AcmeProviderType>()"></select>
+        </div>
+        <div class="col-md-8">
+            <label class="form-label" asp-for="DirectoryUrl">Directory URL</label>
+            <input class="form-control" asp-for="DirectoryUrl" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" asp-for="AccountEmail">Account email</label>
+            <input class="form-control" asp-for="AccountEmail" type="email" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="ExternalAccountBindingKeyId">EAB Key ID</label>
+            <input class="form-control" asp-for="ExternalAccountBindingKeyId" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="ExternalAccountBindingHmacKey">EAB HMAC Key</label>
+            <input class="form-control" asp-for="ExternalAccountBindingHmacKey" type="password" autocomplete="new-password" placeholder="Leave empty to keep existing key" />
+        </div>
+        <div class="col-12">
+            <label class="form-label" asp-for="Notes">Notes</label>
+            <textarea class="form-control" asp-for="Notes" rows="2"></textarea>
+        </div>
+        <div class="col-md-6">
+            <div class="form-check form-switch">
+                <input class="form-check-input" asp-for="IsStaging" />
+                <label class="form-check-label" asp-for="IsStaging">Staging</label>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-check form-switch">
+                <input class="form-check-input" asp-for="IsEnabled" />
+                <label class="form-check-label" asp-for="IsEnabled">Enabled</label>
+            </div>
+        </div>
+    </div>
+    <hr />
+    <button class="btn btn-primary">Save</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>

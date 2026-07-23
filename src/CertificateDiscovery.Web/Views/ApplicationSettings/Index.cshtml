@@ -1,0 +1,68 @@
+@model CertificateDiscovery.Contracts.ApplicationSettingsDto
+@{
+    ViewData["Title"] = "Application Settings";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Application Settings</h2>
+        <div class="text-muted">Manage scheduler behavior and certificate alert thresholds.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-controller="Home" asp-action="Index">Dashboard</a>
+</div>
+
+@if (TempData["SettingsSaved"] is not null)
+{
+    <div class="alert alert-success">@TempData["SettingsSaved"]</div>
+}
+
+<form method="post" class="asset-form">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <section class="mb-4">
+        <h3 class="section-title">Scheduler</h3>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" asp-for="DefaultScanIntervalMinutes">Default scan interval minutes</label>
+                <input class="form-control" asp-for="DefaultScanIntervalMinutes" type="number" min="1" max="525600" />
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" asp-for="SchedulerEnabled" />
+                    <label class="form-check-label" asp-for="SchedulerEnabled">Scheduler enabled</label>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-4">
+        <h3 class="section-title">Certificate Alert Thresholds</h3>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label" asp-for="ExpireCriticalDays">Critical days</label>
+                <input class="form-control" asp-for="ExpireCriticalDays" type="number" min="0" max="365" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" asp-for="ExpireWarningDays">Warning days</label>
+                <input class="form-control" asp-for="ExpireWarningDays" type="number" min="1" max="730" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" asp-for="ExpireAttentionDays">Attention days</label>
+                <input class="form-control" asp-for="ExpireAttentionDays" type="number" min="1" max="1095" />
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3 class="section-title">Worker Limits</h3>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" asp-for="MaxConcurrentScans">Maximum concurrent scans</label>
+                <input class="form-control" asp-for="MaxConcurrentScans" type="number" min="1" max="1000" />
+            </div>
+        </div>
+    </section>
+
+    <hr />
+    <button class="btn btn-primary">Save Settings</button>
+</form>

@@ -1,0 +1,14 @@
+@model CertificateDiscovery.Contracts.VaultServerUpsertRequest
+@{
+    ViewData["Title"] = "New Vault";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>New Vault</h2>
+        <div class="text-muted">Register a HashiCorp Vault server.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+</div>
+
+@await Html.PartialAsync("_VaultForm", Model)

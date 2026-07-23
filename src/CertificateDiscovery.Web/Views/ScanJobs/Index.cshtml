@@ -1,0 +1,48 @@
+@model IReadOnlyList<CertificateDiscovery.Contracts.ScanJobDto>
+@{
+    ViewData["Title"] = "Scan Jobs";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Scan Jobs</h2>
+        <div class="text-muted">Latest @Model.Count job records</div>
+    </div>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Job Queue History</h2>
+        <span class="text-muted">Scheduled and manual discovery work</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Status</th><th>Trigger</th><th>Requested</th><th>Started</th><th>Completed</th><th>Total</th><th>Success</th><th>Failed</th><th>Worker</th><th>Duration</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var job in Model)
+            {
+                <tr>
+                    <td><a asp-action="Details" asp-route-id="@job.Id">@job.Status</a></td>
+                    <td>@job.TriggerType</td>
+                    <td>@job.RequestedAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>@(job.StartedAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>@(job.CompletedAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>@job.TotalAssetCount</td>
+                    <td>@job.SuccessfulAssetCount</td>
+                    <td>@job.FailedAssetCount</td>
+                    <td>@job.WorkerId</td>
+                    <td>@job.DurationMilliseconds</td>
+                    <td class="text-end">
+                        @if (User.IsInRole("Admin") && job.Status == CertificateDiscovery.Domain.ScanJobStatus.Running)
+                        {
+                            <form method="post" asp-action="Requeue" asp-route-id="@job.Id" class="d-inline">
+                                <button class="btn btn-outline-primary btn-sm">Re-queue</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

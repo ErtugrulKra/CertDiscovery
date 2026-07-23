@@ -1,0 +1,12 @@
+@model CertificateDiscovery.Contracts.AssetCreateRequest
+@using CertificateDiscovery.Domain
+@{
+    ViewData["Title"] = "New Asset";
+}
+
+<h1 class="h3 mb-3">New Asset</h1>
+<form method="post" class="asset-form">
+    <partial name="_AssetFields" model="Model" />
+    <button class="btn btn-primary">Create</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>

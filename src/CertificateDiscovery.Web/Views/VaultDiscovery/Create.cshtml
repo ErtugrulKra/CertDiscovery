@@ -1,0 +1,63 @@
+@model CertificateDiscovery.Web.Models.VaultDiscoveryCreateViewModel
+@{
+    ViewData["Title"] = "New Vault Discovery";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>New Vault Discovery</h2>
+        <div class="text-muted">Scan a Vault KV v2 mount/path for certificate PEM fields.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+</div>
+
+<form method="post" class="asset-form">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.Name">Name</label>
+            <input class="form-control" asp-for="Request.Name" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.VaultServerId">Vault server</label>
+            <select class="form-select" asp-for="Request.VaultServerId">
+                <option value="">Select Vault</option>
+                @foreach (var vault in Model.Options.VaultServers)
+                {
+                    <option value="@vault.Id">@vault.Name (@vault.BaseUrl)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.KvMountPath">KV mount</label>
+            <input class="form-control" asp-for="Request.KvMountPath" placeholder="secret" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Request.BasePath">Base path</label>
+            <input class="form-control" asp-for="Request.BasePath" placeholder="certificates" />
+        </div>
+        <div class="col-md-6">
+            <div class="form-check form-switch">
+                <input class="form-check-input" asp-for="Request.Recursive" />
+                <label class="form-check-label" asp-for="Request.Recursive">Recursive</label>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-check form-switch">
+                <input class="form-check-input" asp-for="Request.CreateAssets" />
+                <label class="form-check-label" asp-for="Request.CreateAssets">Create HTTPS assets from DNS names</label>
+            </div>
+        </div>
+    </div>
+    <hr />
+    <button class="btn btn-primary">Create And Run</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>
+
+<section class="panel mt-3">
+    <div class="panel-header"><h2>Expected Secret Fields</h2></div>
+    <div class="panel-body">
+        <p class="mb-2">The scanner looks for <code>certificate_pem</code>, <code>cert_pem</code>, or <code>certificate</code>. It also uses <code>fullchain_pem</code> or <code>chain_pem</code> when present.</p>
+        <p class="mb-0">Wildcard SANs are imported as certificate names, but they are not promoted to assets automatically.</p>
+    </div>
+</section>

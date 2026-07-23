@@ -1,0 +1,40 @@
+@model CertificateDiscovery.Web.Models.CreateUserViewModel
+@{
+    ViewData["Title"] = "New User";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>New User</h2>
+        <div class="text-muted">Create an Admin or Read account.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back to users</a>
+</div>
+
+<form method="post" class="asset-form">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" asp-for="UserName">User name</label>
+            <input class="form-control" asp-for="UserName" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="DisplayName">Display name</label>
+            <input class="form-control" asp-for="DisplayName" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Role">Role</label>
+            <select class="form-select" asp-for="Role">
+                <option value="Read">Read</option>
+                <option value="Admin">Admin</option>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Password">Password</label>
+            <input class="form-control" asp-for="Password" type="password" autocomplete="new-password" />
+        </div>
+    </div>
+    <hr />
+    <button class="btn btn-primary">Create</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>

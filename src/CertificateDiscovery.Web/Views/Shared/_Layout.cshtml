@@ -1,0 +1,92 @@
+@{
+    var controller = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "Home");
+    string Active(string name) => string.Equals(controller, name, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Certificate Discovery</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/CertificateDiscovery.Web.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <div class="admin-shell">
+        <aside class="admin-sidebar">
+            <a class="brand" asp-controller="Home" asp-action="Index">
+                <span class="brand-mark">CD</span>
+                <span>
+                    <strong>Certificate</strong>
+                    <small>Discovery Platform</small>
+                </span>
+            </a>
+
+            <nav class="sidebar-nav" aria-label="Main navigation">
+                <div class="nav-section">
+                    <div class="nav-section-title">Core Operations</div>
+                    <a class="@Active("Home")" asp-controller="Home" asp-action="Index"><i class="fa-solid fa-gauge-high nav-icon" aria-hidden="true"></i><span>Dashboard</span></a>
+                    <a class="@Active("Assets")" asp-controller="Assets" asp-action="Index"><i class="fa-solid fa-server nav-icon" aria-hidden="true"></i><span>Assets</span></a>
+                    <a class="@Active("Certificates")" asp-controller="Certificates" asp-action="Index"><i class="fa-solid fa-certificate nav-icon" aria-hidden="true"></i><span>Certificates</span></a>
+                    <a class="@Active("ScanJobs")" asp-controller="ScanJobs" asp-action="Index"><i class="fa-solid fa-list-check nav-icon" aria-hidden="true"></i><span>Scan Jobs</span></a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Discovery</div>
+                    <a class="@Active("NetworkDiscovery")" asp-controller="NetworkDiscovery" asp-action="Index"><i class="fa-solid fa-network-wired nav-icon" aria-hidden="true"></i><span>Network Discovery</span></a>
+                    <a class="@Active("VaultDiscovery")" asp-controller="VaultDiscovery" asp-action="Index"><i class="fa-solid fa-vault nav-icon" aria-hidden="true"></i><span>Vault Discovery</span></a>
+                </div>
+
+                @if (User.IsInRole("Admin"))
+                {
+                    <div class="nav-section">
+                        <div class="nav-section-title">Automation</div>
+                        <a class="@Active("CertificateRequests")" asp-controller="CertificateRequests" asp-action="Index"><i class="fa-solid fa-rotate nav-icon" aria-hidden="true"></i><span>Certificate Requests</span></a>
+                    </div>
+
+                    <div class="nav-section">
+                        <div class="nav-section-title">Management</div>
+                        <a class="@Active("Integrations")" asp-controller="Integrations" asp-action="Index"><i class="fa-solid fa-plug nav-icon" aria-hidden="true"></i><span>Integrations</span></a>
+                        <a class="@Active("WorkerNodes")" asp-controller="WorkerNodes" asp-action="Index"><i class="fa-solid fa-microchip nav-icon" aria-hidden="true"></i><span>Workers</span></a>
+                        <a class="@Active("Users")" asp-controller="Users" asp-action="Index"><i class="fa-solid fa-users-gear nav-icon" aria-hidden="true"></i><span>Users</span></a>
+                    </div>
+
+                    <div class="nav-section">
+                        <div class="nav-section-title">Settings</div>
+                        <a class="@Active("ApplicationSettings")" asp-controller="ApplicationSettings" asp-action="Index"><i class="fa-solid fa-sliders nav-icon" aria-hidden="true"></i><span>Application Settings</span></a>
+                    </div>
+                }
+            </nav>
+        </aside>
+
+        <div class="admin-main">
+            <header class="admin-topbar">
+                <div>
+                    <div class="eyebrow">Operations Console</div>
+                    <h1>@(ViewData["Title"] ?? "Dashboard")</h1>
+                </div>
+                <div class="topbar-actions">
+                    <a class="user-chip" asp-controller="UserProfile" asp-action="Index">
+                        <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
+                        <span>@(User.FindFirst("DisplayName")?.Value ?? User.Identity?.Name) (@(User.IsInRole("Admin") ? "Admin" : "Read"))</span>
+                    </a>
+                    <form method="post" asp-controller="Account" asp-action="Logout" class="d-inline">
+                        <button class="btn btn-outline-secondary btn-sm">Logout</button>
+                    </form>
+                </div>
+            </header>
+
+            <main class="content-surface" role="main">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,0 +1,69 @@
+@model IReadOnlyList<CertificateDiscovery.Contracts.CertificateRequestListDto>
+@{
+    ViewData["Title"] = "Certificate Requests";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Certificate Requests</h2>
+        <div class="text-muted">Issue ACME certificates and store the resulting material in Vault.</div>
+    </div>
+    <a class="btn btn-primary btn-sm" asp-action="Create">New Request</a>
+</div>
+
+@if (TempData["CertificateRequestMessage"] is string message)
+{
+    <div class="alert alert-success">@message</div>
+}
+@if (TempData["CertificateRequestError"] is string error)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Requests</h2>
+        <span class="text-muted">@Model.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Domain</th><th>SANs</th><th>Status</th><th>Schedule</th><th>ACME</th><th>Vault</th><th>DNS</th><th>Path</th><th>Created</th><th>Issued</th><th>Stored</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td><a asp-action="Details" asp-route-id="@item.Id">@item.Domain</a></td>
+                    <td class="truncate">@item.SubjectAlternativeNames</td>
+                    <td><span class="badge status-neutral">@item.Status</span><div class="text-danger small">@item.ErrorMessage</div></td>
+                    <td>
+                        @if (item.ScheduleCheck)
+                        {
+                            <span class="badge status-neutral">Enabled</span>
+                            <div class="small text-muted">@item.RenewalThresholdDays days / <code>@item.RenewalCronExpression</code></div>
+                            <div class="small">Next: @(item.NextScheduleCheckAtUtc?.ToLocalTime().ToString("g") ?? "-")</div>
+                            <div class="small text-muted">@item.LastScheduleCheckStatus</div>
+                        }
+                        else
+                        {
+                            <span class="text-muted">-</span>
+                        }
+                    </td>
+                    <td>@item.AcmeProviderName</td>
+                    <td>@item.VaultServerName</td>
+                    <td>@(item.DnsProviderName ?? "-")</td>
+                    <td><code>@item.VaultSecretPath</code></td>
+                    <td>@item.CreatedAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>@(item.IssuedAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>@(item.StoredAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td class="text-end">
+                        <a class="btn btn-outline-secondary btn-sm" asp-action="Edit" asp-route-id="@item.Id">Edit</a>
+                        <form method="post" asp-action="Delete" asp-route-id="@item.Id" class="d-inline">
+                            <button class="btn btn-outline-danger btn-sm" disabled="@(item.Status == CertificateDiscovery.Domain.CertificateRequestStatus.Validating)">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

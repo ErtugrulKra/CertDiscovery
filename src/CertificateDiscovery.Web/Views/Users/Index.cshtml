@@ -1,0 +1,42 @@
+@model IReadOnlyList<CertificateDiscovery.Domain.Entities.AppUser>
+@{
+    ViewData["Title"] = "Users";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>User Management</h2>
+        <div class="text-muted">@Model.Count local users</div>
+    </div>
+    <a class="btn btn-primary btn-sm" asp-action="Create">New User</a>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Users</h2>
+        <span class="text-muted">Admin can manage assets and jobs; Read can only view.</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>User name</th><th>Display name</th><th>Role</th><th>Enabled</th><th>Last login</th><th>Created</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var user in Model)
+            {
+                <tr>
+                    <td>@user.UserName</td>
+                    <td>@user.DisplayName</td>
+                    <td><span class="badge @(user.Role == "Admin" ? "status-critical" : "status-neutral")">@user.Role</span></td>
+                    <td><span class="badge @(user.IsEnabled ? "status-online" : "status-neutral")">@(user.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                    <td>@(user.LastLoginAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>@user.CreatedAtUtc.ToLocalTime().ToString("g")</td>
+                    <td class="text-end">
+                        <form method="post" asp-action="Toggle" asp-route-id="@user.Id" class="d-inline">
+                            <button class="btn btn-outline-warning btn-sm">Toggle</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

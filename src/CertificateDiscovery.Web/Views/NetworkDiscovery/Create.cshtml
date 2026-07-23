@@ -1,0 +1,51 @@
+@model CertificateDiscovery.Web.Models.DiscoveryJobCreateViewModel
+@{
+    ViewData["Title"] = "New Network Discovery";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>New Network Discovery</h2>
+        <div class="text-muted">Define a safe IPv4 CIDR range and TLS ports to probe.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+</div>
+
+<form method="post" class="asset-form">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Name">Name</label>
+            <input class="form-control" asp-for="Name" placeholder="Datacenter edge discovery" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Cidr">IPv4 CIDR</label>
+            <input class="form-control" asp-for="Cidr" placeholder="10.10.0.0/24" />
+            <div class="form-text">Allowed prefix range is /16 to /32.</div>
+        </div>
+        <div class="col-md-12">
+            <label class="form-label" asp-for="Ports">TLS Ports</label>
+            <input class="form-control" asp-for="Ports" />
+            <div class="form-text">Recommended: 443, 8443, 9443, 465, 993, 995, 636</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="TimeoutSeconds">Timeout seconds</label>
+            <input class="form-control" asp-for="TimeoutSeconds" type="number" min="1" max="30" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="MaxConcurrency">Max concurrency</label>
+            <input class="form-control" asp-for="MaxConcurrency" type="number" min="1" max="1000" />
+        </div>
+    </div>
+    <hr />
+    <button class="btn btn-primary">Create Discovery Job</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>
+
+<section class="panel mt-3">
+    <div class="panel-header"><h2>Notes</h2></div>
+    <div class="panel-body">
+        <p class="mb-2">The worker connects directly to each IP and port. If a service requires SNI, the default certificate may be discovered instead of the virtual-host certificate.</p>
+        <p class="mb-0">STARTTLS ports such as SMTP 587 are not part of this first range scanner; use implicit TLS ports like 465, 993 and 995.</p>
+    </div>
+</section>

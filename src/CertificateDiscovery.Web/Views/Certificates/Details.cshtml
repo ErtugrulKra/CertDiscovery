@@ -1,0 +1,124 @@
+@model CertificateDiscovery.Contracts.CertificateDetailDto
+@{
+    ViewData["Title"] = "Certificate Detail";
+    var dnsNames = Model.SubjectAlternativeNames
+        .Where(x => x.Type == CertificateDiscovery.Domain.CertificateSanType.DNS)
+        .Select(x => x.Name)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+    var requestDomain = !string.IsNullOrWhiteSpace(Model.CommonName)
+        ? Model.CommonName
+        : dnsNames.FirstOrDefault();
+    var requestSans = requestDomain is null
+        ? string.Join(", ", dnsNames)
+        : string.Join(", ", dnsNames.Where(x => !string.Equals(x, requestDomain, StringComparison.OrdinalIgnoreCase)));
+    string statusClass = Model.Status.ToString().ToLowerInvariant() switch
+    {
+        "healthy" => "status-healthy",
+        "expired" => "status-expired",
+        "critical" => "status-critical",
+        "warning" => "status-warning",
+        "attention" => "status-attention",
+        _ => "status-neutral"
+    };
+}
+
+<div class="page-heading">
+    <div>
+        <h2>@Model.CommonName</h2>
+        <div><span class="badge @statusClass">@Model.Status</span> <span class="text-muted">@Model.RemainingDays days remaining</span></div>
+    </div>
+    <div class="toolbar">
+        @if (User.IsInRole("Admin") && !string.IsNullOrWhiteSpace(requestDomain))
+        {
+            <a class="btn btn-primary btn-sm"
+               asp-controller="CertificateRequests"
+               asp-action="Create"
+               asp-route-domain="@requestDomain"
+               asp-route-subjectAlternativeNames="@requestSans"
+               asp-route-vaultSecretPath="secret/certificates/@requestDomain">Create Request</a>
+        }
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back to certificates</a>
+    </div>
+</div>
+
+<section class="panel">
+    <div class="panel-header"><h2>Certificate Profile</h2></div>
+    <div class="panel-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Subject</dt><dd class="col-sm-9">@Model.Subject</dd>
+            <dt class="col-sm-3">Issuer</dt><dd class="col-sm-9">@Model.Issuer</dd>
+            <dt class="col-sm-3">Serial Number</dt><dd class="col-sm-9"><code>@Model.SerialNumber</code></dd>
+            <dt class="col-sm-3">Fingerprint</dt><dd class="col-sm-9"><code>@Model.FingerprintSha256</code></dd>
+            <dt class="col-sm-3">Valid From</dt><dd class="col-sm-9">@Model.NotBeforeUtc.ToLocalTime().ToString("g")</dd>
+            <dt class="col-sm-3">Valid To</dt><dd class="col-sm-9">@Model.NotAfterUtc.ToLocalTime().ToString("g")</dd>
+            <dt class="col-sm-3">Signature</dt><dd class="col-sm-9">@Model.SignatureAlgorithm</dd>
+            <dt class="col-sm-3">Public Key</dt><dd class="col-sm-9">@Model.PublicKeyAlgorithm @Model.PublicKeySize</dd>
+            <dt class="col-sm-3">Self Signed</dt><dd class="col-sm-9">@Model.IsSelfSigned</dd>
+            <dt class="col-sm-3">Source</dt><dd class="col-sm-9"><span class="badge status-neutral">@Model.Source</span> @Model.SourceName</dd>
+            <dt class="col-sm-3">External Reference</dt><dd class="col-sm-9">@(Model.ExternalReference ?? "-")</dd>
+        </dl>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Certificate Chain</h2>
+        <span class="text-muted">@Model.ChainEntries.Count certificates</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>#</th><th>Common Name</th><th>Subject</th><th>Issuer</th><th>Valid To</th><th>Fingerprint</th><th>Self Signed</th></tr></thead>
+            <tbody>
+            @foreach (var entry in Model.ChainEntries)
+            {
+                <tr>
+                    <td>@entry.Position</td>
+                    <td>@(entry.CommonName ?? "-")</td>
+                    <td class="text-truncate truncate">@entry.Subject</td>
+                    <td class="text-truncate truncate">@entry.Issuer</td>
+                    <td>@entry.NotAfterUtc.ToLocalTime().ToString("g")</td>
+                    <td><code>@entry.FingerprintSha256</code></td>
+                    <td><span class="badge @(entry.IsSelfSigned ? "status-attention" : "status-neutral")">@entry.IsSelfSigned</span></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header"><h2>Subject Alternative Names</h2></div>
+    <div class="panel-body">
+        @foreach (var san in Model.SubjectAlternativeNames)
+        {
+            <span class="badge san-badge border me-1 mb-1">@san.Type: @san.Name</span>
+        }
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Assets Using This Certificate</h2>
+        <span class="text-muted">@Model.Assets.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Asset</th><th>Endpoint</th><th>Environment</th><th>Owner</th><th>First Seen</th><th>Last Seen</th><th>Active</th></tr></thead>
+            <tbody>
+            @foreach (var asset in Model.Assets)
+            {
+                <tr>
+                    <td><a asp-controller="Assets" asp-action="Details" asp-route-id="@asset.AssetId">@asset.AssetName</a></td>
+                    <td><code>@asset.Protocol://@asset.Host:@asset.Port</code></td>
+                    <td>@asset.Environment</td>
+                    <td>@asset.Owner</td>
+                    <td>@asset.FirstSeenAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>@asset.LastSeenAtUtc.ToLocalTime().ToString("g")</td>
+                    <td><span class="badge @(asset.IsCurrentlyActive ? "status-online" : "status-neutral")">@(asset.IsCurrentlyActive ? "Active" : "Inactive")</span></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

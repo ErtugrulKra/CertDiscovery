@@ -1,0 +1,125 @@
+@model CertificateDiscovery.Contracts.IntegrationIndexDto
+@{
+    ViewData["Title"] = "Integrations";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Integrations</h2>
+        <div class="text-muted">Manage Vault servers, ACME providers, and DNS providers.</div>
+    </div>
+    <div class="toolbar">
+        <a class="btn btn-primary btn-sm" asp-action="CreateVault">New Vault</a>
+        <a class="btn btn-outline-primary btn-sm" asp-action="CreateAcme">New ACME Provider</a>
+        <a class="btn btn-outline-primary btn-sm" asp-action="CreateDns">New DNS Provider</a>
+    </div>
+</div>
+
+@if (TempData["IntegrationMessage"] is not null)
+{
+    <div class="alert alert-success">@TempData["IntegrationMessage"]</div>
+}
+@if (TempData["IntegrationError"] is not null)
+{
+    <div class="alert alert-danger">@TempData["IntegrationError"]</div>
+}
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Vault Servers</h2>
+        <span class="text-muted">@Model.VaultServers.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>URL</th><th>PKI Mount</th><th>Token</th><th>Enabled</th><th>Last Sync</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var vault in Model.VaultServers)
+            {
+                <tr>
+                    <td>@vault.Name<div class="text-muted small">@vault.Description</div></td>
+                    <td><code>@vault.BaseUrl</code></td>
+                    <td>@(vault.PkiMountPath ?? "-")</td>
+                    <td><span class="badge @(vault.HasToken ? "status-online" : "status-neutral")">@(vault.HasToken ? "Configured" : "Missing")</span></td>
+                    <td><span class="badge @(vault.IsEnabled ? "status-online" : "status-neutral")">@(vault.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                    <td>@(vault.LastSyncAtUtc?.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>@(vault.LastSyncStatus ?? "-")<div class="text-danger small">@vault.LastSyncError</div></td>
+                    <td class="text-end">
+                        <a class="btn btn-outline-secondary btn-sm" asp-action="EditVault" asp-route-id="@vault.Id">Edit</a>
+                        <form method="post" asp-action="ScanVaultPublicEndpoint" asp-route-id="@vault.Id" class="d-inline">
+                            <button class="btn btn-outline-primary btn-sm">Scan TLS</button>
+                        </form>
+                        <form method="post" asp-action="ImportVaultPki" asp-route-id="@vault.Id" class="d-inline">
+                            <button class="btn btn-outline-primary btn-sm">Import PKI</button>
+                        </form>
+                        <form method="post" asp-action="DeleteVault" asp-route-id="@vault.Id" class="d-inline">
+                            <button class="btn btn-outline-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>DNS Providers</h2>
+        <span class="text-muted">@Model.DnsProviders.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>Type</th><th>Zone</th><th>Token</th><th>Enabled</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var provider in Model.DnsProviders)
+            {
+                <tr>
+                    <td>@provider.Name<div class="text-muted small">@provider.Notes</div></td>
+                    <td>@provider.ProviderType</td>
+                    <td><code>@provider.ZoneName</code></td>
+                    <td><span class="badge @(provider.HasApiToken ? "status-online" : "status-neutral")">@(provider.HasApiToken ? "Configured" : "Missing")</span></td>
+                    <td><span class="badge @(provider.IsEnabled ? "status-online" : "status-neutral")">@(provider.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                    <td class="text-end">
+                        <a class="btn btn-outline-secondary btn-sm" asp-action="EditDns" asp-route-id="@provider.Id">Edit</a>
+                        <form method="post" asp-action="DeleteDns" asp-route-id="@provider.Id" class="d-inline">
+                            <button class="btn btn-outline-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>ACME Providers</h2>
+        <span class="text-muted">@Model.AcmeProviders.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>Type</th><th>Directory URL</th><th>Account</th><th>EAB</th><th>Mode</th><th>Enabled</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var provider in Model.AcmeProviders)
+            {
+                <tr>
+                    <td>@provider.Name<div class="text-muted small">@provider.Notes</div></td>
+                    <td>@provider.ProviderType</td>
+                    <td><code>@provider.DirectoryUrl</code></td>
+                    <td>@provider.AccountEmail</td>
+                    <td><span class="badge @(provider.HasExternalAccountBinding ? "status-online" : "status-neutral")">@(provider.HasExternalAccountBinding ? "Configured" : "None")</span></td>
+                    <td><span class="badge @(provider.IsStaging ? "status-warning" : "status-online")">@(provider.IsStaging ? "Staging" : "Production")</span></td>
+                    <td><span class="badge @(provider.IsEnabled ? "status-online" : "status-neutral")">@(provider.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                    <td class="text-end">
+                        <a class="btn btn-outline-secondary btn-sm" asp-action="EditAcme" asp-route-id="@provider.Id">Edit</a>
+                        <form method="post" asp-action="DeleteAcme" asp-route-id="@provider.Id" class="d-inline">
+                            <button class="btn btn-outline-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

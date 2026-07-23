@@ -1,0 +1,63 @@
+@model CertificateDiscovery.Domain.Entities.DiscoveryJob
+@{
+    ViewData["Title"] = "Network Discovery Detail";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>@Model.Name</h2>
+        <div class="text-muted"><code>@Model.Cidr</code> on ports @Model.Ports</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+</div>
+
+<div class="metric-grid">
+    <div class="metric"><span>Status</span><strong class="fs-4">@Model.Status</strong><small>@Model.WorkerId</small></div>
+    <div class="metric"><span>Scanned</span><strong>@Model.Results.Count</strong><small>of @Model.TotalEndpointCount endpoints</small></div>
+    <div class="metric"><span>Certificates</span><strong>@Model.Results.Count(x => x.CertificateId != null)</strong><small>unique endpoints with certs</small></div>
+    <div class="metric"><span>Failures</span><strong>@Model.Results.Count(x => x.Status == CertificateDiscovery.Domain.ScanResultStatus.Failed)</strong><small>timeouts, refused, TLS errors</small></div>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Discovered Endpoints</h2>
+        <span class="text-muted">@Model.Results.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Endpoint</th><th>Status</th><th>Certificate</th><th>Fingerprint</th><th>Expires</th><th>TLS</th><th>Cipher</th><th>Error</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var result in Model.Results.OrderByDescending(x => x.CertificateId != null).ThenBy(x => x.IpAddress).ThenBy(x => x.Port))
+            {
+                <tr>
+                    <td><code>@result.IpAddress:@result.Port</code></td>
+                    <td><span class="badge @(result.Status == CertificateDiscovery.Domain.ScanResultStatus.Success ? "status-online" : "status-neutral")">@result.Status</span></td>
+                    <td>
+                        @if (result.CertificateId is not null)
+                        {
+                            <a asp-controller="Certificates" asp-action="Details" asp-route-id="@result.CertificateId">@result.Certificate?.CommonName</a>
+                        }
+                    </td>
+                    <td><code>@(result.Certificate?.FingerprintSha256?[..Math.Min(16, result.Certificate.FingerprintSha256.Length)])</code></td>
+                    <td>@(result.Certificate?.NotAfterUtc.ToLocalTime().ToString("g") ?? "-")</td>
+                    <td>@result.TlsProtocol</td>
+                    <td>@result.CipherSuite</td>
+                    <td>@result.ErrorType @result.ErrorMessage</td>
+                    <td class="text-end">
+                        @if (User.IsInRole("Admin") && result.CertificateId is not null && result.PromotedAssetId is null)
+                        {
+                            <form method="post" asp-action="Promote" asp-route-id="@result.Id" asp-route-jobId="@Model.Id" class="d-inline">
+                                <button class="btn btn-outline-primary btn-sm">Promote</button>
+                            </form>
+                        }
+                        else if (result.PromotedAssetId is not null)
+                        {
+                            <a class="btn btn-outline-secondary btn-sm" asp-controller="Assets" asp-action="Details" asp-route-id="@result.PromotedAssetId">Asset</a>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

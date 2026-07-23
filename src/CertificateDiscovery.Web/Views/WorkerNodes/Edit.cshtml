@@ -1,0 +1,36 @@
+@model CertificateDiscovery.Web.Models.WorkerNodeEditViewModel
+@{
+    ViewData["Title"] = "Edit Worker";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Edit Worker</h2>
+        <div class="text-muted">@Model.WorkerName</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back to workers</a>
+</div>
+
+<form method="post" class="asset-form">
+    <input type="hidden" asp-for="Id" />
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" asp-for="WorkerName">Worker name</label>
+            <input class="form-control" asp-for="WorkerName" disabled />
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+            <div class="form-check form-switch">
+                <input class="form-check-input" asp-for="IsEnabled" />
+                <label class="form-check-label" asp-for="IsEnabled">Enabled</label>
+            </div>
+        </div>
+        <div class="col-12">
+            <label class="form-label" asp-for="Description">Description</label>
+            <textarea class="form-control" asp-for="Description" rows="3"></textarea>
+        </div>
+    </div>
+    <hr />
+    <button class="btn btn-primary">Save</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>

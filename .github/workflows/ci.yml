@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore CertificateDiscovery.sln --configfile NuGet.Config
+
+      - name: Build
+        run: dotnet build CertificateDiscovery.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test CertificateDiscovery.sln --no-build --configuration Release --verbosity normal
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r workers/certificate-discovery-worker/requirements.txt
+
+      - name: Run worker tests
+        env:
+          PYTHONPATH: workers/certificate-discovery-worker
+        run: python -m pytest workers/certificate-discovery-worker/tests -q

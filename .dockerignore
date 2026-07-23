@@ -1,0 +1,21 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/.vscode/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+.dotnet-home/
+.appdata/
+.localappdata/
+.nuget/
+.keys/
+.git/
+.agents/
+.codex/
+*.db
+*.db-shm
+*.db-wal
+*.log
+Certificate Discovery Platform.docx

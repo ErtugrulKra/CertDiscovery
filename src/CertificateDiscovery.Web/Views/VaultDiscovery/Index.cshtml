@@ -1,0 +1,44 @@
+@model IReadOnlyList<CertificateDiscovery.Contracts.VaultDiscoveryJobDto>
+@{
+    ViewData["Title"] = "Vault Discovery";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Vault Discovery</h2>
+        <div class="text-muted">Scan Vault KV paths for certificate material and import it into the inventory.</div>
+    </div>
+    @if (User.IsInRole("Admin"))
+    {
+        <a class="btn btn-primary btn-sm" asp-action="Create">New Vault Discovery</a>
+    }
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Discovery Jobs</h2>
+        <span class="text-muted">@Model.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>Vault</th><th>Path</th><th>Status</th><th>Requested</th><th>Secrets</th><th>Certificates</th><th>Assets</th><th>Failures</th><th>Duration</th></tr></thead>
+            <tbody>
+            @foreach (var job in Model)
+            {
+                <tr>
+                    <td><a asp-action="Details" asp-route-id="@job.Id">@job.Name</a></td>
+                    <td>@job.VaultServerName</td>
+                    <td><code>@job.KvMountPath/@job.BasePath</code></td>
+                    <td><span class="badge status-neutral">@job.Status</span></td>
+                    <td>@job.RequestedAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>@job.SecretCount</td>
+                    <td>@job.CertificateFoundCount</td>
+                    <td>@job.AssetCreatedCount</td>
+                    <td>@job.FailedSecretCount</td>
+                    <td>@(job.DurationMilliseconds?.ToString() ?? "-")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

@@ -1,0 +1,14 @@
+@model CertificateDiscovery.Contracts.DnsProviderUpsertRequest
+@{
+    ViewData["Title"] = "New DNS Provider";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>New DNS Provider</h2>
+        <div class="text-muted">Register a DNS API provider for ACME DNS-01 TXT record publishing.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+</div>
+
+@await Html.PartialAsync("_DnsForm", Model)

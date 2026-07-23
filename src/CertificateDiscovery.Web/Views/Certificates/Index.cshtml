@@ -1,0 +1,54 @@
+@model IReadOnlyList<CertificateDiscovery.Contracts.CertificateSummaryDto>
+@{
+    ViewData["Title"] = "Certificates";
+    string StatusClass(object status)
+    {
+        var value = status.ToString()?.ToLowerInvariant() ?? "";
+        return value switch
+        {
+            "healthy" => "status-healthy",
+            "expired" => "status-expired",
+            "critical" => "status-critical",
+            "warning" => "status-warning",
+            "attention" => "status-attention",
+            _ => "status-neutral"
+        };
+    }
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Certificates</h2>
+        <div class="text-muted">@Model.Count unique fingerprints discovered</div>
+    </div>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Certificate Register</h2>
+        <span class="text-muted">Status is calculated from NotAfter</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Common Name</th><th>Source</th><th>Subject</th><th>Issuer</th><th>Fingerprint</th><th>Valid To</th><th>Days</th><th>Status</th><th>Self Signed</th><th>Assets</th><th>Last Seen</th></tr></thead>
+            <tbody>
+            @foreach (var cert in Model)
+            {
+                <tr>
+                    <td><a asp-action="Details" asp-route-id="@cert.Id">@cert.CommonName</a></td>
+                    <td><span class="badge status-neutral">@cert.Source</span><div class="text-muted small">@cert.SourceName</div></td>
+                    <td class="text-truncate truncate">@cert.Subject</td>
+                    <td class="text-truncate truncate">@cert.Issuer</td>
+                    <td><code>@cert.FingerprintSha256[..Math.Min(16, cert.FingerprintSha256.Length)]</code></td>
+                    <td>@cert.NotAfterUtc.ToLocalTime().ToString("g")</td>
+                    <td>@cert.RemainingDays</td>
+                    <td><span class="badge @StatusClass(cert.Status)">@cert.Status</span></td>
+                    <td>@cert.IsSelfSigned</td>
+                    <td>@cert.AssetCount</td>
+                    <td>@cert.LastSeenAtUtc.ToLocalTime().ToString("g")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

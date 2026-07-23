@@ -1,0 +1,58 @@
+@model IReadOnlyList<CertificateDiscovery.Contracts.WorkerNodeDto>
+@{
+    ViewData["Title"] = "Worker Nodes";
+    string StatusClass(string status) => status.ToLowerInvariant() switch
+    {
+        "online" => "status-online",
+        "stale" => "status-warning",
+        "offline" => "status-neutral",
+        "disabled" => "status-neutral",
+        _ => "status-neutral"
+    };
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Worker Nodes</h2>
+        <div class="text-muted">@Model.Count registered workers</div>
+    </div>
+    <div class="toolbar">
+        <a class="btn btn-outline-secondary btn-sm" asp-controller="Home" asp-action="Index">Dashboard</a>
+        <a class="btn btn-primary btn-sm" asp-action="Create">New Worker</a>
+    </div>
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Workers</h2>
+        <span class="text-muted">Disabled workers can heartbeat but cannot claim new jobs.</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>Status</th><th>Enabled</th><th>Version</th><th>Heartbeat</th><th>Processed</th><th>Description</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var worker in Model)
+            {
+                <tr>
+                    <td>@worker.WorkerName</td>
+                    <td><span class="badge @StatusClass(worker.Status)">@worker.Status</span></td>
+                    <td><span class="badge @(worker.IsEnabled ? "status-online" : "status-neutral")">@(worker.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                    <td>@(worker.Version ?? "-")</td>
+                    <td>@worker.LastHeartbeatAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>@worker.ProcessedJobCount</td>
+                    <td class="text-truncate truncate">@(worker.Description ?? "-")</td>
+                    <td class="text-end">
+                        <a class="btn btn-outline-secondary btn-sm" asp-action="Edit" asp-route-id="@worker.Id">Edit</a>
+                        <form method="post" asp-action="Toggle" asp-route-id="@worker.Id" class="d-inline">
+                            <button class="btn btn-outline-warning btn-sm">Toggle</button>
+                        </form>
+                        <form method="post" asp-action="Delete" asp-route-id="@worker.Id" class="d-inline">
+                            <button class="btn btn-outline-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

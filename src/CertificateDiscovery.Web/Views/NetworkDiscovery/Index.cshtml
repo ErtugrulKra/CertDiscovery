@@ -1,0 +1,44 @@
+@model IReadOnlyList<CertificateDiscovery.Contracts.DiscoveryJobDto>
+@{
+    ViewData["Title"] = "Network Discovery";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>Network Range Discovery</h2>
+        <div class="text-muted">Scan CIDR ranges for TLS certificates on common secure ports.</div>
+    </div>
+    @if (User.IsInRole("Admin"))
+    {
+        <a class="btn btn-primary btn-sm" asp-action="Create">New Discovery</a>
+    }
+</div>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Discovery Jobs</h2>
+        <span class="text-muted">Pending jobs are processed by the range worker</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>CIDR</th><th>Ports</th><th>Status</th><th>Requested</th><th>Endpoints</th><th>Found</th><th>Failed</th><th>Worker</th><th>Duration</th></tr></thead>
+            <tbody>
+            @foreach (var job in Model)
+            {
+                <tr>
+                    <td><a asp-action="Details" asp-route-id="@job.Id">@job.Name</a></td>
+                    <td><code>@job.Cidr</code></td>
+                    <td>@job.Ports</td>
+                    <td><span class="badge status-neutral">@job.Status</span></td>
+                    <td>@job.RequestedAtUtc.ToLocalTime().ToString("g")</td>
+                    <td>@job.ScannedEndpointCount / @job.TotalEndpointCount</td>
+                    <td>@job.CertificateFoundCount</td>
+                    <td>@job.FailedEndpointCount</td>
+                    <td>@job.WorkerId</td>
+                    <td>@job.DurationMilliseconds</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

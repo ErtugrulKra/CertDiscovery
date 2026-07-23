@@ -1,0 +1,187 @@
+@model CertificateDiscovery.Contracts.CertificateRequestDetailDto
+@using CertificateDiscovery.Domain
+@{
+    ViewData["Title"] = "Certificate Request Details";
+}
+
+<div class="page-heading">
+    <div>
+        <h2>@Model.Domain</h2>
+        <div class="text-muted">Manual DNS-01 ACME issuance to Vault.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Back</a>
+</div>
+
+@if (TempData["CertificateRequestMessage"] is string message)
+{
+    <div class="alert alert-success">@message</div>
+}
+@if (TempData["CertificateRequestError"] is string error)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Request</h2>
+        <span class="badge status-neutral">@Model.Status</span>
+    </div>
+    <div class="panel-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Domains</dt>
+            <dd class="col-sm-9">
+                @foreach (var domain in Model.Domains)
+                {
+                    <span class="badge san-badge border me-1 mb-1">@domain</span>
+                }
+            </dd>
+            <dt class="col-sm-3">ACME Provider</dt>
+            <dd class="col-sm-9">@Model.AcmeProviderName <code>@Model.AcmeDirectoryUrl</code></dd>
+            <dt class="col-sm-3">Vault Target</dt>
+            <dd class="col-sm-9">@Model.VaultServerName <code>@Model.VaultSecretPath</code></dd>
+            <dt class="col-sm-3">DNS Provider</dt>
+            <dd class="col-sm-9">@(Model.DnsProviderName ?? "Manual TXT only")</dd>
+            <dt class="col-sm-3">Created</dt>
+            <dd class="col-sm-9">@Model.CreatedAtUtc.ToLocalTime().ToString("F")</dd>
+            <dt class="col-sm-3">Issued</dt>
+            <dd class="col-sm-9">@(Model.IssuedAtUtc?.ToLocalTime().ToString("F") ?? "-")</dd>
+            <dt class="col-sm-3">Stored</dt>
+            <dd class="col-sm-9">@(Model.StoredAtUtc?.ToLocalTime().ToString("F") ?? "-")</dd>
+            @if (Model.CertificateId is not null)
+            {
+                <dt class="col-sm-3">Certificate</dt>
+                <dd class="col-sm-9"><a asp-controller="Certificates" asp-action="Details" asp-route-id="@Model.CertificateId">Open certificate</a></dd>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+            {
+                <dt class="col-sm-3">Error</dt>
+                <dd class="col-sm-9 text-danger">@Model.ErrorMessage</dd>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.DnsPublishStatus) || !string.IsNullOrWhiteSpace(Model.DnsPublishError))
+            {
+                <dt class="col-sm-3">DNS Publish</dt>
+                <dd class="col-sm-9">
+                    @(Model.DnsPublishStatus ?? "-")
+                    <span class="text-muted">@(Model.DnsPublishedAtUtc?.ToLocalTime().ToString("g") ?? "")</span>
+                    <div class="text-danger small">@Model.DnsPublishError</div>
+                </dd>
+            }
+            @if (Model.RenewedFromRequestId is not null)
+            {
+                <dt class="col-sm-3">Renewed From</dt>
+                <dd class="col-sm-9"><a asp-action="Details" asp-route-id="@Model.RenewedFromRequestId">@Model.RenewedFromRequestId</a></dd>
+            }
+        </dl>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Scheduled Renewal</h2>
+        <div class="toolbar">
+            <form method="post" asp-action="RunScheduleCheck" asp-route-id="@Model.Id">
+                <button class="btn btn-outline-primary btn-sm" disabled="@(!Model.ScheduleCheck)">Run Schedule Check Now</button>
+            </form>
+        </div>
+    </div>
+    <div class="panel-body">
+        @if (!Model.ScheduleCheck)
+        {
+            <p class="text-muted mb-0">ScheduleCheck is disabled for this request.</p>
+        }
+        else
+        {
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Threshold</dt>
+                <dd class="col-sm-9">@Model.RenewalThresholdDays days</dd>
+                <dt class="col-sm-3">CRON</dt>
+                <dd class="col-sm-9"><code>@Model.RenewalCronExpression</code></dd>
+                <dt class="col-sm-3">Next Check</dt>
+                <dd class="col-sm-9">@(Model.NextScheduleCheckAtUtc?.ToLocalTime().ToString("F") ?? "-")</dd>
+                <dt class="col-sm-3">Last Check</dt>
+                <dd class="col-sm-9">@(Model.LastScheduleCheckAtUtc?.ToLocalTime().ToString("F") ?? "-")</dd>
+                <dt class="col-sm-3">Last Status</dt>
+                <dd class="col-sm-9">
+                    @(Model.LastScheduleCheckStatus ?? "-")
+                    <div class="text-muted small">@Model.LastScheduleCheckMessage</div>
+                </dd>
+                @if (Model.LastRenewalRequestId is not null)
+                {
+                    <dt class="col-sm-3">Last Renewal Request</dt>
+                    <dd class="col-sm-9"><a asp-action="Details" asp-route-id="@Model.LastRenewalRequestId">@Model.LastRenewalRequestId</a></dd>
+                }
+            </dl>
+        }
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>DNS-01 Challenge</h2>
+        <div class="toolbar">
+            <form method="post" asp-action="StartChallenge" asp-route-id="@Model.Id">
+                <button class="btn btn-outline-primary btn-sm" disabled="@(Model.Status is CertificateRequestStatus.Validating or CertificateRequestStatus.Issued or CertificateRequestStatus.StoredInVault)">Start / Recreate Challenge</button>
+            </form>
+            <form method="post" asp-action="PublishDns" asp-route-id="@Model.Id">
+                <button class="btn btn-outline-primary btn-sm" disabled="@(string.IsNullOrWhiteSpace(Model.DnsTxtValue) || Model.DnsProviderId is null)">Publish TXT To DNS Provider</button>
+            </form>
+            <form method="post" asp-action="CleanupDns" asp-route-id="@Model.Id">
+                <button class="btn btn-outline-danger btn-sm" disabled="@(string.IsNullOrWhiteSpace(Model.DnsTxtValue) || Model.DnsProviderId is null)">Cleanup TXT Records</button>
+            </form>
+        </div>
+    </div>
+    <div class="panel-body">
+        @if (string.IsNullOrWhiteSpace(Model.DnsTxtName) || string.IsNullOrWhiteSpace(Model.DnsTxtValue))
+        {
+            <p class="text-muted mb-0">Start the challenge to generate the DNS TXT record.</p>
+        }
+        else
+        {
+            var names = Model.DnsTxtName.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var values = Model.DnsTxtValue.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>TXT name</th><th>TXT value</th></tr></thead>
+                            <tbody>
+                            @for (var i = 0; i < names.Length; i++)
+                            {
+                                <tr>
+                                    <td><input class="form-control font-monospace" value="@names[i]" readonly /></td>
+                                    <td><textarea class="form-control font-monospace" rows="2" readonly>@(i < values.Length ? values[i] : "")</textarea></td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="alert alert-info mb-0">Add every TXT record shown here at your DNS provider, wait for propagation, then continue. The application will poll ACME status for up to 5 minutes before finalizing.</div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Issue And Store</h2>
+        <form method="post" asp-action="ValidateIssueAndStore" asp-route-id="@Model.Id">
+            <button class="btn btn-primary btn-sm" disabled="@string.IsNullOrWhiteSpace(Model.DnsTxtValue)">Validate, Issue, Store In Vault</button>
+        </form>
+    </div>
+    <div class="panel-body">
+        <p class="mb-0">The application will ask the ACME server to validate DNS, issue the certificate, store certificate material in Vault KV v2, and add the certificate to the inventory.</p>
+    </div>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.CertificatePem))
+{
+    <section class="panel">
+        <div class="panel-header"><h2>Issued Certificate PEM</h2></div>
+        <div class="panel-body">
+            <textarea class="form-control font-monospace" rows="10" readonly>@Model.CertificatePem</textarea>
+        </div>
+    </section>
+}

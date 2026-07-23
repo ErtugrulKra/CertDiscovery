@@ -1,0 +1,58 @@
+@model CertificateDiscovery.Domain.Entities.Asset
+@{
+    ViewData["Title"] = "Asset Detail";
+    var active = Model.AssetCertificates.FirstOrDefault(x => x.IsCurrentlyActive)?.Certificate;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">@Model.Name</h1>
+    @if (User.IsInRole("Admin"))
+    {
+        <div>
+            <form class="d-inline" method="post" asp-action="Scan" asp-route-id="@Model.Id"><button class="btn btn-primary btn-sm">Manual Scan</button></form>
+            <a class="btn btn-outline-secondary btn-sm" asp-action="Edit" asp-route-id="@Model.Id">Edit</a>
+        </div>
+    }
+</div>
+
+<dl class="row">
+    <dt class="col-sm-2">Endpoint</dt><dd class="col-sm-10">@Model.Protocol://@Model.Host:@Model.Port</dd>
+    <dt class="col-sm-2">Environment</dt><dd class="col-sm-10">@Model.Environment</dd>
+    <dt class="col-sm-2">Owner</dt><dd class="col-sm-10">@Model.Owner</dd>
+    <dt class="col-sm-2">Active Certificate</dt><dd class="col-sm-10">@(active?.CommonName ?? "-")</dd>
+</dl>
+
+<h2 class="h5">Certificate History</h2>
+<table class="table table-sm">
+    <thead><tr><th>Common Name</th><th>Valid To</th><th>First Seen</th><th>Last Seen</th><th>Active</th></tr></thead>
+    <tbody>
+    @foreach (var item in Model.AssetCertificates)
+    {
+        <tr>
+            <td><a asp-controller="Certificates" asp-action="Details" asp-route-id="@item.CertificateId">@item.Certificate.CommonName</a></td>
+            <td>@item.Certificate.NotAfterUtc.ToLocalTime().ToString("g")</td>
+            <td>@item.FirstSeenAtUtc.ToLocalTime().ToString("g")</td>
+            <td>@item.LastSeenAtUtc.ToLocalTime().ToString("g")</td>
+            <td>@item.IsCurrentlyActive</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h2 class="h5 mt-4">Recent Scan Results</h2>
+<table class="table table-sm">
+    <thead><tr><th>Status</th><th>Completed</th><th>TLS</th><th>Cipher</th><th>Error</th><th>Message</th></tr></thead>
+    <tbody>
+    @foreach (var result in Model.ScanResults)
+    {
+        <tr>
+            <td>@result.Status</td>
+            <td>@result.CompletedAtUtc.ToLocalTime().ToString("g")</td>
+            <td>@result.TlsProtocol</td>
+            <td>@result.CipherSuite</td>
+            <td>@result.ErrorType</td>
+            <td>@result.ErrorMessage</td>
+        </tr>
+    }
+    </tbody>
+</table>
