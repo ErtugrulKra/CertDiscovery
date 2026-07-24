@@ -1,12 +1,106 @@
-# Certificate Discovery Platform
+<p align="center">
+  <img src="docs/images/certdiscovery-logo.png"
+       alt="CertDiscovery"
+       width="600">
+</p>
 
-[![CI](https://github.com/ErtugrulKra/CertDiscovery/actions/workflows/ci.yml/badge.svg)](https://github.com/ErtugrulKra/CertDiscovery/actions/workflows/ci.yml)
-![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+<p align="center">
+  <strong>
+    Open-source TLS certificate discovery and lifecycle management.
+  </strong>
+</p>
 
-> Discover, inventory, and manage TLS certificates across your infrastructure through a web UI, REST API, and Python discovery workers.
+<p align="center">
+  Discover every certificate before it becomes an outage.
+</p>
 
-Certificate Discovery Platform scans endpoints defined as assets, discovers TLS/SSL certificates, tracks expiration, and shows where certificates are used. It supports scheduled scanning, CIDR-based network discovery, HashiCorp Vault integration, and ACME certificate issuance with optional Cloudflare DNS-01 automation.
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#roadmap">Roadmap</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ErtugrulKra/CertDiscovery/actions/workflows/ci.yml"><img src="https://github.com/ErtugrulKra/CertDiscovery/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/.NET-8.0-512BD4" alt=".NET 8">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+</p>
+
+<p align="center">
+  <img src="docs/dashboard.png"
+       alt="CertDiscovery Dashboard"
+       width="1000">
+</p>
+
+## Know what exists before you automate it
+
+TLS certificates are spread across web applications, APIs, reverse proxies,
+load balancers, mail systems, directories, private networks, and secret stores.
+Spreadsheets and renewal reminders only work for certificates you already know
+about.
+
+> **You can't automate certificates you don't know exist.**
+
+CertDiscovery continuously discovers certificates across your infrastructure,
+builds a centralized inventory, monitors expiration, and creates the foundation
+for automated certificate lifecycle operations.
+
+## Built for the shorter TLS certificate era
+
+Certificate lifecycle management is becoming an automation problem.
+
+<p align="center">
+  <strong>398 days</strong><br>
+  ↓<br>
+  <strong>200 days</strong><br>
+  ↓<br>
+  <strong>100 days</strong><br>
+  ↓<br>
+  <strong>47 days</strong>
+</p>
+
+Manual certificate inventories and renewal processes won't scale.
+
+CertDiscovery is built around a simple principle:
+
+> **Discovery first. Automation second.**
+
+TLS certificate lifetimes are getting shorter. CertDiscovery helps you discover
+certificates across your infrastructure, build a centralized inventory, monitor
+expiration, and automate certificate lifecycle operations.
+
+## See CertDiscovery in action
+
+### Dashboard
+
+See certificate health, upcoming expirations, managed assets, and recent scan
+activity from a single operational view. The dashboard shown above gives teams an
+immediate view of their current TLS risk.
+
+### Certificate Inventory
+
+Build a searchable source of truth for certificate ownership, validity, issuer,
+fingerprints, SANs, certificate chains, and the assets where each certificate is
+used.
+
+<p align="center">
+  <img src="docs/certificates.png"
+       alt="CertDiscovery Certificate Inventory"
+       width="1000">
+</p>
+
+### Network Discovery
+
+Scan CIDR ranges to uncover TLS endpoints that are missing from the known asset
+inventory, inspect their certificates, and promote discovered endpoints into
+managed assets.
+
+<p align="center">
+  <img src="docs/network-discovery.png"
+       alt="CertDiscovery Network Discovery"
+       width="1000">
+</p>
 
 ## Features
 
