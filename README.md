@@ -33,18 +33,28 @@
        width="1000">
 </p>
 
-## Know what exists before you automate it
+## Why CertDiscovery?
 
-TLS certificates are spread across web applications, APIs, reverse proxies,
-load balancers, mail systems, directories, private networks, and secret stores.
-Spreadsheets and renewal reminders only work for certificates you already know
-about.
+TLS certificate management is becoming an automation problem.
+
+As certificate lifetimes continue to shrink, manual inventories,
+renewal spreadsheets, and undocumented endpoints become increasingly risky.
+
+CertDiscovery follows a simple principle:
+
+> **Discovery first. Automation second.**
+
+Before you can automate certificate renewal, you need to know:
+
+- Which certificates exist
+- Where they are deployed
+- When they expire
+- Which systems depend on them
+
+CertDiscovery provides a centralized view of your certificate estate
+and the automation foundation required to manage it.
 
 > **You can't automate certificates you don't know exist.**
-
-CertDiscovery continuously discovers certificates across your infrastructure,
-builds a centralized inventory, monitors expiration, and creates the foundation
-for automated certificate lifecycle operations.
 
 ## Built for the shorter TLS certificate era
 
@@ -61,10 +71,6 @@ Certificate lifecycle management is becoming an automation problem.
 </p>
 
 Manual certificate inventories and renewal processes won't scale.
-
-CertDiscovery is built around a simple principle:
-
-> **Discovery first. Automation second.**
 
 TLS certificate lifetimes are getting shorter. CertDiscovery helps you discover
 certificates across your infrastructure, build a centralized inventory, monitor
