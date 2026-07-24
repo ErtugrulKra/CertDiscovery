@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/dashboard.png"
+  <img src="docs/images/dashboard.png"
        alt="CertDiscovery Dashboard"
        width="1000">
 </p>
@@ -91,7 +91,7 @@ fingerprints, SANs, certificate chains, and the assets where each certificate is
 used.
 
 <p align="center">
-  <img src="docs/certificates.png"
+  <img src="docs/images/certificates.png"
        alt="CertDiscovery Certificate Inventory"
        width="1000">
 </p>
@@ -103,7 +103,7 @@ inventory, inspect their certificates, and promote discovered endpoints into
 managed assets.
 
 <p align="center">
-  <img src="docs/network-discovery.png"
+  <img src="docs/images/network-discovery.png"
        alt="CertDiscovery Network Discovery"
        width="1000">
 </p>
@@ -158,37 +158,22 @@ The SQLite database is stored on the `certificate_sqlite` named volume mounted i
 
 ## Architecture
 
-The solution uses pragmatic Clean Architecture boundaries:
+<p align="center">
+  <img src="docs/images/certdiscovery-architecture.png"
+       alt="CertDiscovery Architecture"
+       width="100%">
+</p>
 
-| Component | Purpose |
-|-----------|---------|
-| `CertificateDiscovery.Domain` | Entities, enums, domain calculations |
-| `CertificateDiscovery.Contracts` | REST API DTOs and request contracts |
-| `CertificateDiscovery.Application` | Configuration option boundaries |
-| `CertificateDiscovery.Infrastructure` | EF Core SQLite, services, scheduler, seed data |
-| `CertificateDiscovery.Web` | ASP.NET Core MVC UI, REST API, Swagger, health checks |
-| `workers/certificate-discovery-worker` | Python asyncio TLS discovery worker |
-| `certificate-range-worker` | CIDR-based network discovery (same worker image) |
-| `tests` | .NET unit/integration tests and Python worker tests |
+CertDiscovery follows a discovery-first architecture.
 
-Workers do not access the SQLite file directly. Job claiming, heartbeat, and scan result submission all flow through the REST API using a shared API key.
+- Infrastructure assets and network ranges are scanned by Python workers.
+- Discovery results are submitted through the REST API.
+- Certificates are normalized into a centralized inventory.
+- ACME and DNS integrations automate issuance and renewal.
+- HashiCorp Vault can be used for certificate storage and discovery.
+- Prometheus and OpenTelemetry provide operational visibility.
 
-```text
-src/
-  CertificateDiscovery.Web/
-  CertificateDiscovery.Application/
-  CertificateDiscovery.Domain/
-  CertificateDiscovery.Infrastructure/
-  CertificateDiscovery.Contracts/
-workers/
-  certificate-discovery-worker/
-tests/
-  CertificateDiscovery.UnitTests/
-  CertificateDiscovery.IntegrationTests/
-docker-compose.yml
-.env.example
-CertificateDiscovery.sln
-```
+> **Discovery first. Automation second.**
 
 ## Development Setup
 
