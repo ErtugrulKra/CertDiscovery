@@ -171,6 +171,13 @@ CertDiscovery follows a discovery-first architecture.
 - Certificates are normalized into a centralized inventory.
 - ACME and DNS integrations automate issuance and renewal.
 - HashiCorp Vault can be used for certificate storage and discovery.
+
+The pre-refactoring lifecycle baseline is documented in
+[`docs/architecture/current-state.md`](docs/architecture/current-state.md),
+[`docs/architecture/current-acme-flow.md`](docs/architecture/current-acme-flow.md)
+and [`docs/architecture/current-data-model.md`](docs/architecture/current-data-model.md).
+The current plaintext-secret risks are tracked in
+[`docs/security/secret-inventory.md`](docs/security/secret-inventory.md).
 - Prometheus and OpenTelemetry provide operational visibility.
 
 > **Discovery first. Automation second.**
