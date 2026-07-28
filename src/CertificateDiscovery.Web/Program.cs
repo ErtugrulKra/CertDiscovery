@@ -2,6 +2,7 @@ using CertificateDiscovery.Application.Options;
 using CertificateDiscovery.Infrastructure;
 using CertificateDiscovery.Infrastructure.Persistence;
 using CertificateDiscovery.Infrastructure.Services;
+using CertificateDiscovery.Infrastructure.Secrets;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
@@ -115,6 +116,8 @@ using (var scope = app.Services.CreateScope())
     {
         await db.Database.EnsureCreatedAsync();
     }
+
+    await scope.ServiceProvider.GetRequiredService<LegacySecretMigrationService>().MigrateAsync(CancellationToken.None);
 
     if (app.Environment.IsDevelopment())
     {

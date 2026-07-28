@@ -39,7 +39,15 @@ public sealed record AcmeProviderDto(
     bool IsEnabled,
     string? Notes,
     DateTime CreatedAtUtc,
-    DateTime? UpdatedAtUtc);
+    DateTime? UpdatedAtUtc,
+    string? Organization = null,
+    string? Department = null,
+    string? CertificateProfile = null,
+    string? ProductType = null,
+    string? AllowedDomainPattern = null,
+    Guid? ActiveAccountId = null,
+    AcmeAccountStatus? ActiveAccountStatus = null,
+    DateTime? LastAccountUseAtUtc = null);
 
 public sealed record AcmeProviderUpsertRequest(
     string Name,
@@ -50,7 +58,12 @@ public sealed record AcmeProviderUpsertRequest(
     string? ExternalAccountBindingHmacKey,
     bool IsStaging,
     bool IsEnabled,
-    string? Notes);
+    string? Notes,
+    string? Organization = null,
+    string? Department = null,
+    string? CertificateProfile = null,
+    string? ProductType = null,
+    string? AllowedDomainPattern = null);
 
 public sealed record DnsProviderDto(
     Guid Id,
@@ -61,7 +74,27 @@ public sealed record DnsProviderDto(
     bool IsEnabled,
     string? Notes,
     DateTime CreatedAtUtc,
-    DateTime? UpdatedAtUtc);
+    DateTime? UpdatedAtUtc,
+    string? HostedZoneId = null,
+    AwsDnsAuthenticationMode AwsAuthenticationMode = AwsDnsAuthenticationMode.DefaultCredentialChain,
+    bool HasAwsAccessKey = false,
+    bool HasAwsSecretKey = false,
+    bool HasAwsSessionToken = false,
+    string? RoleArn = null,
+    string? Region = null,
+    AzureDnsAuthenticationMode AzureAuthenticationMode = AzureDnsAuthenticationMode.DefaultAzureCredential,
+    string? TenantId = null,
+    string? SubscriptionId = null,
+    string? ResourceGroup = null,
+    string? ClientId = null,
+    bool HasAzureClientSecret = false,
+    string? ManagedIdentityClientId = null,
+    int TtlSeconds = 120,
+    int PropagationTimeoutSeconds = 300,
+    int PropagationPollingIntervalSeconds = 10,
+    DateTime? LastHealthCheckAtUtc = null,
+    string? LastHealthCheckStatus = null,
+    string? LastHealthCheckError = null);
 
 public sealed record DnsProviderUpsertRequest(
     string Name,
@@ -69,7 +102,24 @@ public sealed record DnsProviderUpsertRequest(
     string ZoneName,
     string? ApiToken,
     bool IsEnabled,
-    string? Notes);
+    string? Notes,
+    string? HostedZoneId = null,
+    AwsDnsAuthenticationMode AwsAuthenticationMode = AwsDnsAuthenticationMode.DefaultCredentialChain,
+    string? AwsAccessKey = null,
+    string? AwsSecretKey = null,
+    string? AwsSessionToken = null,
+    string? RoleArn = null,
+    string? Region = null,
+    AzureDnsAuthenticationMode AzureAuthenticationMode = AzureDnsAuthenticationMode.DefaultAzureCredential,
+    string? TenantId = null,
+    string? SubscriptionId = null,
+    string? ResourceGroup = null,
+    string? ClientId = null,
+    string? AzureClientSecret = null,
+    string? ManagedIdentityClientId = null,
+    int TtlSeconds = 120,
+    int PropagationTimeoutSeconds = 300,
+    int PropagationPollingIntervalSeconds = 10);
 
 public sealed record IntegrationIndexDto(
     IReadOnlyList<VaultServerDto> VaultServers,

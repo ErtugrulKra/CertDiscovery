@@ -117,7 +117,7 @@ managed assets.
 - **REST API + Swagger** — full programmatic access at `/swagger`
 - **Python asyncio workers** — concurrent discovery via API-key-protected job polling
 - **Vault integration** — import from public TLS endpoints, PKI mounts, and KV v2 secrets
-- **ACME issuance** — DNS-01 validation with manual or Cloudflare-automated TXT publishing
+- **ACME issuance** — DNS-01 validation with manual, Cloudflare, AWS Route53 or Azure DNS TXT publishing
 - **Scheduled ACME renewal** — threshold-based renewal with Vault KV storage
 - **Observability** — Prometheus `/metrics` and OpenTelemetry instrumentation
 - **Role-based access** — Admin and Read roles with cookie authentication
@@ -178,6 +178,23 @@ The pre-refactoring lifecycle baseline is documented in
 and [`docs/architecture/current-data-model.md`](docs/architecture/current-data-model.md).
 The current plaintext-secret risks are tracked in
 [`docs/security/secret-inventory.md`](docs/security/secret-inventory.md).
+
+Sectigo EAB and persistent ACME account setup is documented in
+[`docs/integrations/sectigo-acme.md`](docs/integrations/sectigo-acme.md).
+
+Certificate lifecycle integrations use explicit provider boundaries:
+
+- `IAcmeCertificateClient` isolates Certes order and issuance behavior.
+- `IDnsChallengeProvider` and its resolver isolate manual, Cloudflare, Route53 and Azure DNS.
+- `ICertificateStore` isolates Vault KV storage.
+- `ICertificateDeploymentOrchestrator` separates issuance from lease-based, auditable deployment.
+- `ICertificateDeployer` adapters implement precheck, backup, deploy, activation, verification and rollback.
+- `ICertificateInventoryWriter` owns X.509 parsing and inventory persistence.
+- `ICertificateRequestStateMachine` validates lifecycle state transitions.
+
+New DNS and certificate storage integrations should be registered through the
+provider extension methods instead of adding provider switches to controllers or
+the request orchestration service.
 - Prometheus and OpenTelemetry provide operational visibility.
 
 > **Discovery first. Automation second.**
@@ -277,7 +294,7 @@ Worker endpoints require the `X-Worker-Api-Key` header.
 
 - Change the default `Admin/Admin123` credentials immediately after first login.
 - Provide the worker API key through environment variables — never embed it in source code.
-- ACME private keys and DNS provider API tokens are stored in the local SQLite database in this MVP. Use encrypted storage or external secret references before production use.
+- ACME account keys, EAB secrets and DNS provider credentials are encrypted through secret references; configure persistent Data Protection keys and an external secret provider before production use.
 - Raw PEM data is not shown in UI lists; it is stored in the database.
 - For production: enable HTTPS, configure cookie policy, rotate secrets, add audit logging, and apply private network allowlist/denylist controls for worker outbound connections.
 - The Docker Compose Vault service runs in dev mode with a `root` token. Do not use this configuration in production.
@@ -347,7 +364,7 @@ Manage integrations at `/Integrations`. Issue certificates at `/CertificateReque
 
 1. Create an ACME provider (start with Let's Encrypt Staging).
 2. Create a Vault integration (Compose dev Vault: `http://vault:8200`, token `root`).
-3. Optionally create a Cloudflare DNS provider for automatic TXT publishing.
+3. Optionally create a Cloudflare, Route53 or Azure DNS provider for automatic TXT publishing. See [enterprise DNS setup](docs/integrations/enterprise-dns.md).
 4. Create a certificate request with domain, SANs, and Vault KV path.
 5. Start the challenge, publish TXT records (automatic or manual), validate, issue, and store in Vault.
 
@@ -410,7 +427,7 @@ CertificateDiscovery__OpenTelemetry__OtlpEndpoint=http://otel-collector:4317
 - Certificate chain analysis
 - OCSP/CRL checking
 - Notification system (Email, Teams, Slack)
-- Additional DNS provider integrations
+- Additional DNS provider integrations beyond Cloudflare, Route53 and Azure DNS
 - PostgreSQL and RabbitMQ backends
 - Multi-tenancy
 - Kubernetes deployment manifests

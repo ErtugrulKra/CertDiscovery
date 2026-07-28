@@ -1,0 +1,19 @@
+@model CertificateDiscovery.Contracts.DeploymentIndexDto
+@using CertificateDiscovery.Domain
+@{ ViewData["Title"] = "Deployments"; }
+<div class="page-heading"><div><h2>Certificate Deployments</h2><p>Targets, policies, queue status and deployment history.</p></div>
+<div><a class="btn btn-outline-primary" asp-action="CreateTarget">New target</a> <a class="btn btn-outline-primary" asp-action="CreatePolicy">New policy</a> <a class="btn btn-primary" asp-action="Create">Deploy certificate</a></div></div>
+@if (TempData["DeploymentMessage"] is string message) { <div class="alert alert-success">@message</div> }
+@if (TempData["DeploymentError"] is string error) { <div class="alert alert-danger">@error</div> }
+<section class="panel"><div class="panel-header"><h2>Targets</h2></div><div class="table-responsive"><table class="table table-sm">
+<thead><tr><th>Name</th><th>Type</th><th>Secret</th><th>Enabled</th><th></th></tr></thead><tbody>
+@foreach (var item in Model.Targets) { <tr><td>@item.Name</td><td>@item.TargetType.GetDisplayName()</td><td>@(item.HasSecret ? "Configured" : "None")</td><td>@item.IsEnabled</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" asp-action="EditTarget" asp-route-id="@item.Id">Edit</a> <form class="d-inline" method="post" asp-action="TestTarget" asp-route-id="@item.Id"><button class="btn btn-sm btn-outline-primary">Test</button></form></td></tr> }
+</tbody></table></div></section>
+<section class="panel"><div class="panel-header"><h2>Policies</h2></div><div class="table-responsive"><table class="table table-sm">
+<thead><tr><th>Name</th><th>Approval</th><th>Automatic</th><th>Attempts</th><th>Rollback</th></tr></thead><tbody>
+@foreach (var item in Model.Policies) { <tr><td>@item.Name</td><td>@item.RequireApproval</td><td>@item.AutomaticDeployment</td><td>@item.MaxAttempts</td><td>@item.RollbackOnFailure</td></tr> }
+</tbody></table></div></section>
+<section class="panel"><div class="panel-header"><h2>History</h2></div><div class="table-responsive"><table class="table table-sm">
+<thead><tr><th>Domain</th><th>Target</th><th>Status</th><th>Attempt</th><th>Created</th><th></th></tr></thead><tbody>
+@foreach (var item in Model.Deployments) { <tr><td>@item.Domain</td><td>@item.TargetName</td><td>@item.Status</td><td>@item.Attempt</td><td>@item.CreatedAtUtc.ToLocalTime().ToString("g")</td><td><a class="btn btn-sm btn-outline-secondary" asp-action="Details" asp-route-id="@item.Id">Details</a></td></tr> }
+</tbody></table></div></section>

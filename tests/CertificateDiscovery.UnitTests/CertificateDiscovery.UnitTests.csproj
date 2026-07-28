@@ -27,4 +27,8 @@
     <ProjectReference Include="..\..\src\CertificateDiscovery.Contracts\CertificateDiscovery.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>

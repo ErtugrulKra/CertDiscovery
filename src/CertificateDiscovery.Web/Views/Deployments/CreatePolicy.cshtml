@@ -1,0 +1,12 @@
+@model CertificateDiscovery.Contracts.DeploymentPolicyUpsertRequest
+@{ ViewData["Title"] = "New deployment policy"; }
+<div class="page-heading"><h2>New deployment policy</h2></div><form method="post" class="asset-form"><div asp-validation-summary="ModelOnly" class="text-danger"></div><div class="row g-3">
+<div class="col-md-6"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control"/></div>
+<div class="col-md-3"><label asp-for="MaxAttempts" class="form-label"></label><input asp-for="MaxAttempts" class="form-control"/></div>
+<div class="col-md-3"><label asp-for="RetryDelaySeconds" class="form-label"></label><input asp-for="RetryDelaySeconds" class="form-control"/></div>
+<div class="col-md-3"><label asp-for="VerificationTimeoutSeconds" class="form-label"></label><input asp-for="VerificationTimeoutSeconds" class="form-control"/></div>
+<div class="col-md-3 form-check mt-5"><input asp-for="RequireApproval" class="form-check-input"/><label asp-for="RequireApproval" class="form-check-label"></label></div>
+<div class="col-md-3 form-check mt-5"><input asp-for="AutomaticDeployment" class="form-check-input"/><label asp-for="AutomaticDeployment" class="form-check-label"></label></div>
+<div class="col-md-3 form-check mt-5"><input asp-for="RollbackOnFailure" class="form-check-input"/><label asp-for="RollbackOnFailure" class="form-check-label"></label></div>
+<div class="col-md-3 form-check mt-5"><input asp-for="IsEnabled" class="form-check-input"/><label asp-for="IsEnabled" class="form-check-label"></label></div>
+</div><hr/><button class="btn btn-primary">Save</button> <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></form>

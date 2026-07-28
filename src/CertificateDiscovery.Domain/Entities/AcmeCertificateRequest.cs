@@ -9,6 +9,8 @@ public sealed class AcmeCertificateRequest
     public CertificateRequestStatus Status { get; set; } = CertificateRequestStatus.Draft;
     public Guid AcmeProviderId { get; set; }
     public AcmeProvider? AcmeProvider { get; set; }
+    public Guid? AcmeAccountId { get; set; }
+    public AcmeAccount? AcmeAccount { get; set; }
     public Guid VaultServerId { get; set; }
     public VaultServer? VaultServer { get; set; }
     public Guid? DnsProviderId { get; set; }

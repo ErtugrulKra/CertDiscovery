@@ -22,7 +22,8 @@ public sealed record CertificateRequestListDto(
     string? LastScheduleCheckStatus,
     string? LastScheduleCheckMessage,
     Guid? LastRenewalRequestId,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    Guid? AcmeAccountId = null);
 
 public sealed record CertificateRequestDetailDto(
     Guid Id,
@@ -61,7 +62,8 @@ public sealed record CertificateRequestDetailDto(
     string? LastScheduleCheckStatus,
     string? LastScheduleCheckMessage,
     Guid? RenewedFromRequestId,
-    Guid? LastRenewalRequestId);
+    Guid? LastRenewalRequestId,
+    Guid? AcmeAccountId = null);
 
 public sealed record CertificateRequestCreateOptionsDto(
     IReadOnlyList<AcmeProviderDto> AcmeProviders,

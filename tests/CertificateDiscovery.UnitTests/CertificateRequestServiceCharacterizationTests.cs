@@ -1,11 +1,18 @@
 using System.Net;
-using System.Reflection;
 using System.Text;
+using CertificateDiscovery.Application.Acme;
+using CertificateDiscovery.Application.Dns;
+using CertificateDiscovery.Application.Inventory;
+using CertificateDiscovery.Application.Requests;
+using CertificateDiscovery.Application.Storage;
 using CertificateDiscovery.Contracts;
 using CertificateDiscovery.Domain;
 using CertificateDiscovery.Domain.Entities;
 using CertificateDiscovery.Infrastructure.Persistence;
 using CertificateDiscovery.Infrastructure.Services;
+using CertificateDiscovery.Infrastructure.Dns;
+using CertificateDiscovery.Infrastructure.Inventory;
+using CertificateDiscovery.Infrastructure.Storage;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,6 +49,24 @@ public sealed class CertificateRequestServiceCharacterizationTests
     }
 
     [Fact]
+    public async Task Start_dns_challenge_persists_provider_independent_instructions()
+    {
+        await using var fixture = await RequestFixture.CreateAsync();
+        var request = fixture.SeedRequest(CertificateRequestStatus.Draft);
+        request.SubjectAlternativeNames = "www.example.com";
+        await fixture.Db.SaveChangesAsync();
+
+        await fixture.Service.StartManualDnsChallengeAsync(request.Id, default);
+
+        Assert.Equal(CertificateRequestStatus.PendingDns, request.Status);
+        Assert.Equal("_acme-challenge.example.com\n_acme-challenge.www.example.com", request.DnsTxtName);
+        Assert.Equal("value-example.com\nvalue-www.example.com", request.DnsTxtValue);
+        Assert.Equal("https://acme.test/order/1", request.AcmeOrderLocation);
+        Assert.Equal(FakeAcmeAccountService.AccountId, request.AcmeAccountId);
+        Assert.Null(request.AcmeAccountKeyPem);
+    }
+
+    [Fact]
     public async Task Cloudflare_publish_and_cleanup_use_only_exact_challenge_values()
     {
         var handler = new CloudflareHandler();
@@ -71,7 +96,9 @@ public sealed class CertificateRequestServiceCharacterizationTests
         request.CertificatePrivateKeyPem = "private-key-pem";
         request.IssuedAtUtc = DateTime.UtcNow;
 
-        await InvokePrivateAsync(fixture.Service, "StoreInVaultAsync", request, CancellationToken.None);
+        await fixture.Store.StoreAsync(
+            new CertificateStoreContext(request, fixture.Vault, fixture.Acme, ["example.com"], "leaf-pem", "private-key-pem", "chain-pem"),
+            CancellationToken.None);
 
         Assert.Equal("/v1/secret/data/certificates/example.com", handler.Path);
         Assert.Equal("test-vault-token", handler.VaultToken);
@@ -110,27 +137,55 @@ public sealed class CertificateRequestServiceCharacterizationTests
         Assert.True(request.NextScheduleCheckAtUtc > DateTime.UtcNow);
     }
 
-    private static async Task InvokePrivateAsync(object target, string name, params object[] arguments)
+    [Fact]
+    public async Task Scheduled_renewal_reuses_the_persistent_acme_account()
     {
-        var method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Method {name} was not found.");
-        await (Task)(method.Invoke(target, arguments)
-            ?? throw new InvalidOperationException($"Method {name} returned null."));
+        await using var fixture = await RequestFixture.CreateAsync();
+        var request = fixture.SeedRequest(CertificateRequestStatus.StoredInVault);
+        request.AcmeAccountId = FakeAcmeAccountService.AccountId;
+        request.DnsProvider = null;
+        request.DnsProviderId = null;
+        request.ScheduleCheck = true;
+        request.NextScheduleCheckAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        var certificate = new Certificate
+        {
+            FingerprintSha256 = new string('B', 64),
+            Subject = "CN=example.com",
+            Issuer = "CN=issuer",
+            SerialNumber = "02",
+            NotBeforeUtc = DateTime.UtcNow.AddDays(-89),
+            NotAfterUtc = DateTime.UtcNow.AddDays(1),
+            Source = CertificateSource.Acme
+        };
+        fixture.Db.Certificates.Add(certificate);
+        await fixture.Db.SaveChangesAsync();
+        request.CertificateId = certificate.Id;
+        request.Certificate = certificate;
+        await fixture.Db.SaveChangesAsync();
+
+        await fixture.Service.RunScheduledCheckAsync(request.Id, default);
+
+        Assert.Equal(FakeAcmeAccountService.AccountId, request.AcmeAccountId);
+        Assert.Equal(CertificateRequestStatus.PendingDns, request.Status);
+        Assert.Equal("WaitingForManualDns", request.LastScheduleCheckStatus);
+        Assert.Null(request.AcmeAccountKeyPem);
     }
 
     private sealed class RequestFixture : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
 
-        private RequestFixture(SqliteConnection connection, CertificateDiscoveryDbContext db, CertificateRequestService service)
+        private RequestFixture(SqliteConnection connection, CertificateDiscoveryDbContext db, CertificateRequestService service, ICertificateStore store)
         {
             this.connection = connection;
             Db = db;
             Service = service;
+            Store = store;
         }
 
         public CertificateDiscoveryDbContext Db { get; }
         public CertificateRequestService Service { get; }
+        public ICertificateStore Store { get; }
         public AcmeProvider Acme { get; private init; } = null!;
         public VaultServer Vault { get; private init; } = null!;
         public DnsProvider Dns { get; private init; } = null!;
@@ -147,7 +202,29 @@ public sealed class CertificateRequestServiceCharacterizationTests
             var dns = new DnsProvider { Name = "Test DNS", ZoneName = "example.com", ApiToken = "test-cloudflare-token" };
             db.AddRange(acme, vault, dns);
             await db.SaveChangesAsync();
-            return new RequestFixture(connection, db, new CertificateRequestService(db, new TestHttpClientFactory(handler)))
+            db.AcmeAccounts.Add(new AcmeAccount
+            {
+                Id = FakeAcmeAccountService.AccountId,
+                AcmeProviderId = acme.Id,
+                AccountLocation = "https://acme.test/account/1",
+                AccountKeySecretReference = "test-secret",
+                ContactEmail = acme.AccountEmail
+            });
+            await db.SaveChangesAsync();
+            var httpFactory = new TestHttpClientFactory(handler);
+            var cloudflare = new CloudflareDnsChallengeProvider(httpFactory);
+            var resolver = new DnsChallengeProviderResolver([new ManualDnsChallengeProvider(), cloudflare]);
+            var store = new VaultKvCertificateStore(httpFactory);
+            var inventory = new CertificateInventoryWriter(db);
+            var service = new CertificateRequestService(
+                db,
+                new FakeAcmeClient(),
+                new FakeAcmeAccountService(),
+                resolver,
+                store,
+                inventory,
+                new CertificateRequestStateMachine());
+            return new RequestFixture(connection, db, service, store)
             {
                 Acme = acme,
                 Vault = vault,
@@ -181,6 +258,40 @@ public sealed class CertificateRequestServiceCharacterizationTests
             await Db.DisposeAsync();
             await connection.DisposeAsync();
         }
+    }
+
+    private sealed class FakeAcmeClient : IAcmeCertificateClient
+    {
+        public Task TestDirectoryAsync(AcmeProvider provider, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task TestAccountAsync(AcmeProvider provider, AcmeAccountCredentials account, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<string> RotateAccountKeyAsync(AcmeProvider provider, AcmeAccountCredentials account, CancellationToken cancellationToken) => Task.FromResult("rotated-key");
+
+        public Task<AcmeAccountRegistration> RegisterAccountAsync(AcmeProvider provider, string? eabKeyId, string? eabHmacKey, CancellationToken cancellationToken) =>
+            Task.FromResult(new AcmeAccountRegistration("https://acme.test/account/1", "account-key"));
+
+        public Task<AcmeOrderContext> CreateOrderAsync(AcmeProvider provider, AcmeAccountCredentials account, IReadOnlyList<string> domains, CancellationToken cancellationToken) =>
+            Task.FromResult(new AcmeOrderContext("account-key", "https://acme.test/order/1", domains.Select(x =>
+                new AcmeChallengeResult(x, $"_acme-challenge.{x.TrimStart('*').TrimStart('.')}", $"value-{x}")).ToList()));
+
+        public Task<IssuedCertificateBundle> ValidateAndFinalizeAsync(AcmeProvider provider, AcmeAccountCredentials account, AcmeOrderContext order, string commonName, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task RevokeAsync(AcmeProvider provider, string accountKeyPem, string certificatePem, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class FakeAcmeAccountService : IAcmeAccountService
+    {
+        public static readonly Guid AccountId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
+        public Task<AcmeAccountCredentials> GetOrCreateAsync(AcmeProvider provider, CancellationToken cancellationToken) =>
+            Task.FromResult(new AcmeAccountCredentials(AccountId, "https://acme.test/account/1", "account-key"));
+
+        public Task<AcmeAccountCredentials> GetCredentialsAsync(Guid accountId, CancellationToken cancellationToken) =>
+            Task.FromResult(new AcmeAccountCredentials(accountId, "https://acme.test/account/1", "account-key"));
+
+        public Task DisableAsync(Guid accountId, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task RotateKeyAsync(Guid accountId, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class TestHttpClientFactory(HttpMessageHandler? handler) : IHttpClientFactory

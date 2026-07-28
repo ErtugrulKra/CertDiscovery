@@ -1,9 +1,20 @@
 namespace CertificateDiscovery.Infrastructure;
 
 using CertificateDiscovery.Application.Options;
+using CertificateDiscovery.Application.Acme;
+using CertificateDiscovery.Application.Inventory;
+using CertificateDiscovery.Application.Requests;
+using CertificateDiscovery.Application.Secrets;
+using CertificateDiscovery.Infrastructure.Acme;
+using CertificateDiscovery.Infrastructure.Dns;
+using CertificateDiscovery.Infrastructure.Inventory;
 using CertificateDiscovery.Infrastructure.Persistence;
 using CertificateDiscovery.Infrastructure.Scheduling;
 using CertificateDiscovery.Infrastructure.Services;
+using CertificateDiscovery.Infrastructure.Secrets;
+using CertificateDiscovery.Infrastructure.Storage;
+using CertificateDiscovery.Application.Deployment;
+using CertificateDiscovery.Infrastructure.Deployment;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,9 +51,25 @@ public static class DependencyInjection
         services.AddScoped<VaultCertificateImportService>();
         services.AddScoped<CertificateRequestService>();
         services.AddScoped<VaultDiscoveryService>();
+        services.AddScoped<DeploymentService>();
+        services.AddScoped<ICertificateInventoryWriter, CertificateInventoryWriter>();
+        services.AddScoped<ICertificateRequestStateMachine, CertificateRequestStateMachine>();
+        services.AddScoped<ISecretProvider, ProtectedDbSecretProvider>();
+        services.AddScoped<LegacySecretMigrationService>();
+        services.AddScoped<IAcmeAccountService, AcmeAccountService>();
+        services.AddScoped<IDeploymentStateMachine, DeploymentStateMachine>();
+        services.AddScoped<ICertificateBundleConverter, CertificateBundleConverter>();
+        services.AddScoped<IDeploymentQueue, DeploymentQueue>();
+        services.AddScoped<ICertificateDeploymentOrchestrator, CertificateDeploymentOrchestrator>();
+        services.AddScoped<ICertificateDeployer, FakeCertificateDeployer>();
+        services.AddScoped<ICertificateDeployerResolver, CertificateDeployerResolver>();
+        services.AddAcmeServices();
+        services.AddDnsChallengeProviders();
+        services.AddCertificateStores();
         services.AddHttpClient();
         services.AddHostedService<ScanSchedulerService>();
         services.AddHostedService<CertificateRequestRenewalWorker>();
+        services.AddHostedService<DeploymentWorker>();
         return services;
     }
 

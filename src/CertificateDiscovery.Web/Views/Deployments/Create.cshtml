@@ -1,0 +1,7 @@
+@model CertificateDiscovery.Contracts.DeploymentCreateRequest
+@{ ViewData["Title"] = "Deploy certificate"; }
+<div class="page-heading"><h2>Deploy stored certificate</h2></div><form method="post" class="asset-form"><div asp-validation-summary="ModelOnly" class="text-danger"></div><div class="row g-3">
+<div class="col-md-4"><label asp-for="CertificateRequestId" class="form-label"></label><input asp-for="CertificateRequestId" class="form-control"/></div>
+<div class="col-md-4"><label asp-for="DeploymentTargetId" class="form-label"></label><input asp-for="DeploymentTargetId" class="form-control"/></div>
+<div class="col-md-4"><label asp-for="DeploymentPolicyId" class="form-label"></label><input asp-for="DeploymentPolicyId" class="form-control"/></div>
+</div><hr/><button class="btn btn-primary">Create deployment</button> <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></form>

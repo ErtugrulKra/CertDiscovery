@@ -113,7 +113,21 @@ public sealed class IntegrationsController(IntegrationService integrations) : Co
     {
         var provider = await integrations.GetAcmeAsync(id, cancellationToken);
         if (provider is null) return NotFound();
-        return View(new AcmeProviderUpsertRequest(provider.Name, provider.ProviderType, provider.DirectoryUrl.ToString(), provider.AccountEmail, null, null, provider.IsStaging, provider.IsEnabled, provider.Notes));
+        return View(new AcmeProviderUpsertRequest(
+            provider.Name,
+            provider.ProviderType,
+            provider.DirectoryUrl.ToString(),
+            provider.AccountEmail,
+            null,
+            null,
+            provider.IsStaging,
+            provider.IsEnabled,
+            provider.Notes,
+            provider.Organization,
+            provider.Department,
+            provider.CertificateProfile,
+            provider.ProductType,
+            provider.AllowedDomainPattern));
     }
 
     [HttpPost]
@@ -138,6 +152,29 @@ public sealed class IntegrationsController(IntegrationService integrations) : Co
         return deleted ? RedirectToAction(nameof(Index)) : NotFound();
     }
 
+    [HttpPost]
+    public async Task<IActionResult> TestAcmeDirectory(Guid id, CancellationToken cancellationToken) =>
+        await RunAcmeActionAsync(id, "ACME directory connection succeeded.", () => integrations.TestAcmeDirectoryAsync(id, cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> RegisterAcmeAccount(Guid id, CancellationToken cancellationToken) =>
+        await RunAcmeActionAsync(id, "ACME account is registered and ready for reuse.", async () =>
+        {
+            _ = await integrations.RegisterAcmeAccountAsync(id, cancellationToken);
+        });
+
+    [HttpPost]
+    public async Task<IActionResult> TestAcmeAccount(Guid id, CancellationToken cancellationToken) =>
+        await RunAcmeActionAsync(id, "Stored ACME account test succeeded.", () => integrations.TestAcmeAccountAsync(id, cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> DisableAcmeAccount(Guid id, CancellationToken cancellationToken) =>
+        await RunAcmeActionAsync(id, "ACME account was disabled.", () => integrations.DisableAcmeAccountAsync(id, cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> RotateAcmeAccountKey(Guid id, CancellationToken cancellationToken) =>
+        await RunAcmeActionAsync(id, "ACME account key was rotated.", () => integrations.RotateAcmeAccountKeyAsync(id, cancellationToken));
+
     public IActionResult CreateDns() =>
         View(new DnsProviderUpsertRequest("Cloudflare", DnsProviderType.Cloudflare, "example.com", null, true, null));
 
@@ -160,7 +197,12 @@ public sealed class IntegrationsController(IntegrationService integrations) : Co
     {
         var provider = await integrations.GetDnsAsync(id, cancellationToken);
         if (provider is null) return NotFound();
-        return View(new DnsProviderUpsertRequest(provider.Name, provider.ProviderType, provider.ZoneName, null, provider.IsEnabled, provider.Notes));
+        return View(new DnsProviderUpsertRequest(
+            provider.Name, provider.ProviderType, provider.ZoneName, null, provider.IsEnabled, provider.Notes,
+            provider.HostedZoneId, provider.AwsAuthenticationMode, null, null, null, provider.RoleArn, provider.Region,
+            provider.AzureAuthenticationMode, provider.TenantId, provider.SubscriptionId, provider.ResourceGroup,
+            provider.ClientId, null, provider.ManagedIdentityClientId, provider.TtlSeconds,
+            provider.PropagationTimeoutSeconds, provider.PropagationPollingIntervalSeconds));
     }
 
     [HttpPost]
@@ -183,5 +225,35 @@ public sealed class IntegrationsController(IntegrationService integrations) : Co
     {
         var deleted = await integrations.DeleteDnsAsync(id, cancellationToken);
         return deleted ? RedirectToAction(nameof(Index)) : NotFound();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> TestDns(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await integrations.TestDnsAsync(id, cancellationToken);
+            TempData["IntegrationMessage"] = "DNS credentials, zone access, TXT publication, propagation and cleanup succeeded.";
+        }
+        catch (Exception ex)
+        {
+            TempData["IntegrationError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<IActionResult> RunAcmeActionAsync(Guid id, string successMessage, Func<Task> action)
+    {
+        try
+        {
+            await action();
+            TempData["IntegrationMessage"] = successMessage;
+        }
+        catch (Exception ex)
+        {
+            TempData["IntegrationError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 }
