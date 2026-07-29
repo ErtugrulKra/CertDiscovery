@@ -8,7 +8,12 @@ from .discovery import CertificateParseError, connect_tls_with_chain, map_error,
 from .models import ScanErrorType, ScanResultStatus, WorkerDiscoveryResult
 
 PORT_PROTOCOLS = {
+    25: "SMTP",
+    110: "POP3",
+    143: "IMAP",
+    389: "LDAP",
     443: "HTTPS",
+    587: "SMTP",
     465: "SMTPS",
     993: "IMAPS",
     995: "POP3S",
@@ -31,7 +36,7 @@ async def scan_endpoint(job_id: str, ip_address: str, port: int, timeout_seconds
     reverse_dns: str | None = None
     try:
         reverse_dns = await reverse_lookup(ip_address)
-        tls_result = await connect_tls_with_chain(ip_address, port, reverse_dns, timeout_seconds)
+        tls_result = await connect_tls_with_chain(ip_address, port, reverse_dns, timeout_seconds, protocol)
         if not tls_result.certificate_der:
             raise CertificateParseError("Peer did not provide a certificate.")
         certificate = parse_certificate(tls_result.certificate_der, tls_result.chain_der)

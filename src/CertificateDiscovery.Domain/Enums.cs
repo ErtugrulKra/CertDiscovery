@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CertificateDiscovery.Domain;
 
-public enum AssetProtocol { HTTPS, TLS, SMTPS, IMAPS, POP3S, LDAPS }
+public enum AssetProtocol { HTTPS, TLS, SMTPS, IMAPS, POP3S, LDAPS, SMTP, IMAP, POP3, LDAP }
 public enum AssetType { WebApplication, Api, LoadBalancer, ReverseProxy, MailServer, DirectoryServer, Database, Other }
 public enum AssetEnvironment { Development, Test, Staging, Production, Other }
 public enum ScanJobStatus { Pending, Running, Completed, PartiallyCompleted, Failed, Cancelled }

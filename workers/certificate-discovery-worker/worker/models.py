@@ -12,6 +12,10 @@ PROTOCOL_BY_VALUE = {
     3: "IMAPS",
     4: "POP3S",
     5: "LDAPS",
+    6: "SMTP",
+    7: "IMAP",
+    8: "POP3",
+    9: "LDAP",
 }
 
 
