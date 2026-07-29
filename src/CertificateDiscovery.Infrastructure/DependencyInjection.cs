@@ -79,6 +79,9 @@ public static class DependencyInjection
         services.AddScoped<IAwsAcmClientFactory, AwsAcmClientFactory>();
         services.AddScoped<IAwsAcmGateway, AwsAcmGateway>();
         services.AddScoped<ICertificateDeployer, AwsAcmCertificateDeployer>();
+        services.AddScoped<IAzureKeyVaultCertificateClientFactory, AzureKeyVaultCertificateClientFactory>();
+        services.AddScoped<IAzureKeyVaultCertificateGateway, AzureKeyVaultCertificateGateway>();
+        services.AddScoped<ICertificateDeployer, AzureKeyVaultCertificateDeployer>();
         services.AddScoped<ICertificateDeployer, NginxSshCertificateDeployer>();
         services.AddScoped<ICertificateDeployer, ApacheSshCertificateDeployer>();
         services.AddScoped<ICertificateDeployerResolver, CertificateDeployerResolver>();

@@ -20,7 +20,8 @@ public sealed record CertificateDeploymentDto(Guid Id, Guid CertificateRequestId
     CertificateDeploymentStatus Status, DeploymentOrigin Origin, int Attempt, string ExpectedFingerprint,
     string? ObservedFingerprint, string? ErrorCode, string? ErrorMessage, string? BackupReference,
     string? RollbackStatus, string? VerificationStatus, string? RequestedBy, string? ApprovedBy,
-    DateTime CreatedAtUtc, DateTime? StartedAtUtc, DateTime? CompletedAtUtc);
+    DateTime CreatedAtUtc, DateTime? StartedAtUtc, DateTime? CompletedAtUtc,
+    string? ExternalResourceReference = null);
 public sealed record DeploymentAuditEventDto(string EventType, string? Actor, string? Message,
     CertificateDeploymentStatus Status, DateTime CreatedAtUtc, long? DurationMilliseconds);
 public sealed record DeploymentDetailDto(CertificateDeploymentDto Deployment, IReadOnlyList<DeploymentAuditEventDto> Events);
