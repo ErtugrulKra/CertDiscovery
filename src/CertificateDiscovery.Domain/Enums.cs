@@ -31,6 +31,7 @@ public enum AwsAcmAuthenticationMode { DefaultCredentialChain, AssumeRole, Workl
 public enum AzureDnsAuthenticationMode { DefaultAzureCredential, ManagedIdentity, WorkloadIdentity, ServicePrincipal }
 public enum AzureKeyVaultAuthenticationMode { DefaultAzureCredential, ManagedIdentity, WorkloadIdentity, ServicePrincipal }
 public enum AzureKeyVaultImportFormat { Pfx, Pem }
+public enum AzureApplicationGatewayDeploymentMode { KeyVaultReference, DirectUpload }
 public enum CertificateRequestType { Standard, Wildcard }
 public enum CertificateRequestStatus { Draft, PendingDns, ReadyToValidate, Validating, Issued, StoredInVault, Failed }
 public enum AcmeChallengeType { ManualDns01 }
@@ -48,7 +49,8 @@ public enum DeploymentTargetType
     [Display(Name = "Vault KV")] VaultKv,
     [Display(Name = "File System Export")] FileSystem,
     [Display(Name = "AWS ACM")] AwsAcm,
-    [Display(Name = "Azure Key Vault")] AzureKeyVault
+    [Display(Name = "Azure Key Vault")] AzureKeyVault,
+    [Display(Name = "Azure Application Gateway")] AzureApplicationGateway
 }
 public enum CertificateDeploymentStatus
 {

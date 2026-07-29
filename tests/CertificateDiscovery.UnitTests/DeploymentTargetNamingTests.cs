@@ -15,6 +15,7 @@ public sealed class DeploymentTargetNamingTests
     [InlineData(DeploymentTargetType.FileSystem, "File System Export")]
     [InlineData(DeploymentTargetType.AwsAcm, "AWS ACM")]
     [InlineData(DeploymentTargetType.AzureKeyVault, "Azure Key Vault")]
+    [InlineData(DeploymentTargetType.AzureApplicationGateway, "Azure Application Gateway")]
     public void Target_type_uses_required_display_name(DeploymentTargetType type, string expected) =>
         Assert.Equal(expected, type.GetDisplayName());
 
