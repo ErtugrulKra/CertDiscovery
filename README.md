@@ -350,7 +350,7 @@ Notes:
 - STARTTLS ports are not included in the first version of this module.
 - For large ranges, choose timeout and concurrency values carefully.
 
-### Vault and ACME Integrations
+### Vault, Kubernetes and ACME Integrations
 
 Manage integrations at `/Integrations`. Issue certificates at `/CertificateRequests`.
 
@@ -359,6 +359,16 @@ Manage integrations at `/Integrations`. Issue certificates at `/CertificateReque
 - `Scan TLS` — import the public TLS certificate from a Vault server endpoint
 - `Import PKI` — import certificates from a HashiCorp Vault PKI mount
 - Vault KV discovery — scan KV v2 secrets at `/VaultDiscovery`
+
+**Kubernetes TLS Secret discovery:**
+
+- Register an HTTPS Kubernetes API server and protected service-account token.
+- Limit discovery to a comma-separated namespace allowlist, or scan the full cluster.
+- Import leaf certificates, chains, SANs, validity, issuer and subject from `kubernetes.io/tls` Secrets.
+- Preserve every cluster / namespace / Secret source while deduplicating certificates by fingerprint.
+- Private key material is never displayed, logged, or stored.
+
+See [Kubernetes TLS Secret discovery and minimum RBAC](docs/integrations/kubernetes-tls-secret-discovery.md).
 
 **ACME DNS-01 workflow:**
 

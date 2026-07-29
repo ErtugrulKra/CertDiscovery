@@ -7,7 +7,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [Authorize(Roles = "Admin")]
-public sealed class IntegrationsController(IntegrationService integrations) : Controller
+public sealed class IntegrationsController(
+    IntegrationService integrations,
+    KubernetesDiscoveryService kubernetesDiscovery) : Controller
 {
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
         => View(await integrations.GetIndexAsync(cancellationToken));
@@ -83,6 +85,74 @@ public sealed class IntegrationsController(IntegrationService integrations) : Co
             var count = await integrations.ImportVaultPkiAsync(id, cancellationToken);
             if (count is null) return NotFound();
             TempData["IntegrationMessage"] = $"Imported {count} Vault PKI certificate(s).";
+        }
+        catch (Exception ex)
+        {
+            TempData["IntegrationError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index));
+    }
+
+    public IActionResult CreateKubernetes() =>
+        View(new KubernetesClusterUpsertRequest(
+            "", "https://kubernetes.default.svc", null, "default", null, true));
+
+    [HttpPost]
+    public async Task<IActionResult> CreateKubernetes(
+        KubernetesClusterUpsertRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await kubernetesDiscovery.CreateAsync(request, cancellationToken);
+            return RedirectToAction(nameof(Index));
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            ModelState.AddModelError("", ex.Message);
+            return View(request);
+        }
+    }
+
+    public async Task<IActionResult> EditKubernetes(Guid id, CancellationToken cancellationToken)
+    {
+        var cluster = await kubernetesDiscovery.GetAsync(id, cancellationToken);
+        if (cluster is null) return NotFound();
+        return View(new KubernetesClusterUpsertRequest(
+            cluster.Name, cluster.ApiServer.ToString(), cluster.Description,
+            cluster.Namespaces, null, cluster.IsEnabled));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> EditKubernetes(
+        Guid id, KubernetesClusterUpsertRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await kubernetesDiscovery.UpdateAsync(id, request, cancellationToken)
+                ? RedirectToAction(nameof(Index))
+                : NotFound();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            ModelState.AddModelError("", ex.Message);
+            return View(request);
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> DeleteKubernetes(Guid id, CancellationToken cancellationToken) =>
+        await kubernetesDiscovery.DeleteAsync(id, cancellationToken)
+            ? RedirectToAction(nameof(Index))
+            : NotFound();
+
+    [HttpPost]
+    public async Task<IActionResult> DiscoverKubernetes(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var count = await kubernetesDiscovery.DiscoverAsync(id, cancellationToken);
+            if (count is null) return NotFound();
+            TempData["IntegrationMessage"] = $"Discovered {count} Kubernetes TLS Secret certificate(s).";
         }
         catch (Exception ex)
         {

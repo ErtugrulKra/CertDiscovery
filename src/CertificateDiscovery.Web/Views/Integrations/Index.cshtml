@@ -13,6 +13,7 @@
         <a class="btn btn-primary btn-sm" asp-action="CreateVault">New Vault</a>
         <a class="btn btn-outline-primary btn-sm" asp-action="CreateAcme">New ACME Provider</a>
         <a class="btn btn-outline-primary btn-sm" asp-action="CreateDns">New DNS Provider</a>
+        <a class="btn btn-outline-primary btn-sm" asp-action="CreateKubernetes">New Kubernetes Cluster</a>
     </div>
 </div>
 
@@ -53,6 +54,43 @@
                             <button class="btn btn-outline-primary btn-sm">Import PKI</button>
                         </form>
                         <form method="post" asp-action="DeleteVault" asp-route-id="@vault.Id" class="d-inline">
+                            <button class="btn btn-outline-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Kubernetes Clusters</h2>
+        <span class="text-muted">@Model.KubernetesClusters.Count records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Name</th><th>API server</th><th>Namespaces</th><th>Token</th><th>Last discovery</th><th>Enabled</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var cluster in Model.KubernetesClusters)
+            {
+                <tr>
+                    <td>@cluster.Name<div class="small text-muted">@cluster.Description</div></td>
+                    <td><code>@cluster.ApiServer</code></td>
+                    <td>@(cluster.Namespaces ?? "All namespaces")</td>
+                    <td><span class="badge @(cluster.HasBearerToken ? "status-online" : "status-neutral")">@(cluster.HasBearerToken ? "Configured" : "Missing")</span></td>
+                    <td>
+                        @(cluster.LastSyncAtUtc?.ToLocalTime().ToString("g") ?? "-")
+                        <div class="small @(cluster.LastSyncStatus == "Failed" ? "text-danger" : "text-muted")">@cluster.LastSyncStatus @cluster.LastSyncError</div>
+                    </td>
+                    <td><span class="badge @(cluster.IsEnabled ? "status-online" : "status-neutral")">@(cluster.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                    <td class="text-end">
+                        <a class="btn btn-outline-secondary btn-sm" asp-action="EditKubernetes" asp-route-id="@cluster.Id">Edit</a>
+                        <form method="post" asp-action="DiscoverKubernetes" asp-route-id="@cluster.Id" class="d-inline">
+                            <button class="btn btn-outline-primary btn-sm">Discover TLS Secrets</button>
+                        </form>
+                        <form method="post" asp-action="DeleteKubernetes" asp-route-id="@cluster.Id" class="d-inline">
                             <button class="btn btn-outline-danger btn-sm">Delete</button>
                         </form>
                     </td>

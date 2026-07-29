@@ -27,6 +27,16 @@ public sealed class CertificateService(CertificateDiscoveryDbContext db, Applica
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (certificate is null) return null;
+        var kubernetesSources = await db.KubernetesCertificateSources
+            .AsNoTracking()
+            .Where(x => x.CertificateId == id)
+            .Include(x => x.KubernetesCluster)
+            .OrderBy(x => x.KubernetesCluster.Name)
+            .ThenBy(x => x.Namespace)
+            .ThenBy(x => x.SecretName)
+            .Select(x => new KubernetesCertificateSourceDto(
+                x.KubernetesCluster.Name, x.Namespace, x.SecretName, x.FirstSeenAtUtc, x.LastSeenAtUtc))
+            .ToListAsync(cancellationToken);
         var summary = DtoMapper.ToSummary(certificate, null, appSettings.ExpireCriticalDays, appSettings.ExpireWarningDays, appSettings.ExpireAttentionDays);
         return new CertificateDetailDto(
             certificate.Id,
@@ -78,6 +88,7 @@ public sealed class CertificateService(CertificateDiscoveryDbContext db, Applica
                 x.Asset.Owner,
                 x.FirstSeenAtUtc,
                 x.LastSeenAtUtc,
-                x.IsCurrentlyActive)).OrderBy(x => x.AssetName).ToList());
+                x.IsCurrentlyActive)).OrderBy(x => x.AssetName).ToList(),
+            kubernetesSources);
     }
 }

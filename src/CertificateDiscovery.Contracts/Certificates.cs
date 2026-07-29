@@ -41,7 +41,8 @@ public sealed record CertificateDetailDto(
     DateTime LastSeenAtUtc,
     IReadOnlyList<CertificateChainEntryDto> ChainEntries,
     IReadOnlyList<SubjectAlternativeNameDto> SubjectAlternativeNames,
-    IReadOnlyList<CertificateAssetUsageDto> Assets);
+    IReadOnlyList<CertificateAssetUsageDto> Assets,
+    IReadOnlyList<KubernetesCertificateSourceDto>? KubernetesSources = null);
 
 public sealed record SubjectAlternativeNameDto(string Name, CertificateSanType Type);
 
@@ -72,3 +73,10 @@ public sealed record CertificateAssetUsageDto(
     DateTime FirstSeenAtUtc,
     DateTime LastSeenAtUtc,
     bool IsCurrentlyActive);
+
+public sealed record KubernetesCertificateSourceDto(
+    string ClusterName,
+    string Namespace,
+    string SecretName,
+    DateTime FirstSeenAtUtc,
+    DateTime LastSeenAtUtc);

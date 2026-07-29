@@ -121,7 +121,30 @@ public sealed record DnsProviderUpsertRequest(
     int PropagationTimeoutSeconds = 300,
     int PropagationPollingIntervalSeconds = 10);
 
+public sealed record KubernetesClusterDto(
+    Guid Id,
+    string Name,
+    Uri ApiServer,
+    string? Description,
+    string? Namespaces,
+    bool HasBearerToken,
+    bool IsEnabled,
+    DateTime CreatedAtUtc,
+    DateTime? UpdatedAtUtc,
+    DateTime? LastSyncAtUtc,
+    string? LastSyncStatus,
+    string? LastSyncError);
+
+public sealed record KubernetesClusterUpsertRequest(
+    string Name,
+    string ApiServer,
+    string? Description,
+    string? Namespaces,
+    string? BearerToken,
+    bool IsEnabled);
+
 public sealed record IntegrationIndexDto(
     IReadOnlyList<VaultServerDto> VaultServers,
     IReadOnlyList<AcmeProviderDto> AcmeProviders,
-    IReadOnlyList<DnsProviderDto> DnsProviders);
+    IReadOnlyList<DnsProviderDto> DnsProviders,
+    IReadOnlyList<KubernetesClusterDto> KubernetesClusters);

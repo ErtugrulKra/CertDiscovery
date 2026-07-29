@@ -22,7 +22,7 @@ public enum ScanErrorType
 public enum WorkerStatus { Online, Stale, Offline }
 public enum CertificateSanType { DNS, IP, Email, URI, Other }
 public enum CertificateHealthStatus { Expired, Critical, Warning, Attention, Healthy }
-public enum CertificateSource { Scan, NetworkDiscovery, VaultPublicEndpoint, VaultPki, VaultKv, Acme }
+public enum CertificateSource { Scan, NetworkDiscovery, VaultPublicEndpoint, VaultPki, VaultKv, Acme, KubernetesSecret }
 public enum AcmeProviderType { Generic, LetsEncrypt, ZeroSsl, Buypass, GoogleTrustServices, Sectigo, Custom }
 public enum AcmeAccountStatus { Active, Disabled, Deactivated }
 public enum DnsProviderType { Cloudflare, Generic, Route53, AzureDns }
