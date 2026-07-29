@@ -1,0 +1,46 @@
+name: Post-merge build and unit tests
+
+on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - closed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-merge-unit-tests-${{ github.event.pull_request.merge_commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-unit-test:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore CertificateDiscovery.sln --configfile NuGet.Config
+
+      - name: Build solution
+        run: dotnet build CertificateDiscovery.sln --configuration Release --no-restore
+
+      - name: Run unit tests
+        run: >-
+          dotnet test
+          tests/CertificateDiscovery.UnitTests/CertificateDiscovery.UnitTests.csproj
+          --configuration Release
+          --no-build
+          --verbosity normal

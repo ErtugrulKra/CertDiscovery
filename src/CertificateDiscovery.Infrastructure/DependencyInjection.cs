@@ -82,6 +82,8 @@ public static class DependencyInjection
         services.AddScoped<IAzureKeyVaultCertificateClientFactory, AzureKeyVaultCertificateClientFactory>();
         services.AddScoped<IAzureKeyVaultCertificateGateway, AzureKeyVaultCertificateGateway>();
         services.AddScoped<ICertificateDeployer, AzureKeyVaultCertificateDeployer>();
+        services.AddScoped<IAzureApplicationGateway, AzureApplicationGateway>();
+        services.AddScoped<ICertificateDeployer, AzureApplicationGatewayDeployer>();
         services.AddScoped<ICertificateDeployer, NginxSshCertificateDeployer>();
         services.AddScoped<ICertificateDeployer, ApacheSshCertificateDeployer>();
         services.AddScoped<ICertificateDeployerResolver, CertificateDeployerResolver>();
