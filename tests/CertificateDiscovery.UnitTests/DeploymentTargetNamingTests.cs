@@ -13,6 +13,7 @@ public sealed class DeploymentTargetNamingTests
     [InlineData(DeploymentTargetType.ApacheWebServer, "Apache Web Server")]
     [InlineData(DeploymentTargetType.VaultKv, "Vault KV")]
     [InlineData(DeploymentTargetType.FileSystem, "File System Export")]
+    [InlineData(DeploymentTargetType.AwsAcm, "AWS ACM")]
     public void Target_type_uses_required_display_name(DeploymentTargetType type, string expected) =>
         Assert.Equal(expected, type.GetDisplayName());
 

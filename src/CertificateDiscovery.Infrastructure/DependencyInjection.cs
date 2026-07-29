@@ -61,7 +61,11 @@ public static class DependencyInjection
         services.AddScoped<IAcmeAccountService, AcmeAccountService>();
         services.AddScoped<IDeploymentStateMachine, DeploymentStateMachine>();
         services.AddScoped<ICertificateBundleConverter, CertificateBundleConverter>();
-        services.AddScoped<IDeploymentCertificateBundleSource, VaultDeploymentCertificateBundleSource>();
+        services.AddScoped<VaultDeploymentCertificateBundleSource>();
+        services.AddScoped<IDeploymentCertificateBundleSource>(
+            provider => provider.GetRequiredService<VaultDeploymentCertificateBundleSource>());
+        services.AddScoped<IVersionedDeploymentCertificateBundleSource>(
+            provider => provider.GetRequiredService<VaultDeploymentCertificateBundleSource>());
         services.AddScoped<IDeploymentQueue, DeploymentQueue>();
         services.AddScoped<ICertificateDeploymentOrchestrator, CertificateDeploymentOrchestrator>();
         services.AddScoped<ICertificateDeployer, FakeCertificateDeployer>();
@@ -72,6 +76,9 @@ public static class DependencyInjection
         services.AddScoped<ISshCredentialSource, VaultSshCredentialSource>();
         services.AddScoped<ISshRemoteClient, SshNetRemoteClient>();
         services.AddScoped<ITlsEndpointVerifier, TlsEndpointVerifier>();
+        services.AddScoped<IAwsAcmClientFactory, AwsAcmClientFactory>();
+        services.AddScoped<IAwsAcmGateway, AwsAcmGateway>();
+        services.AddScoped<ICertificateDeployer, AwsAcmCertificateDeployer>();
         services.AddScoped<ICertificateDeployer, NginxSshCertificateDeployer>();
         services.AddScoped<ICertificateDeployer, ApacheSshCertificateDeployer>();
         services.AddScoped<ICertificateDeployerResolver, CertificateDeployerResolver>();

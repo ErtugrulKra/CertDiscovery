@@ -187,6 +187,7 @@ public sealed class DeploymentService(
             DeploymentTargetType.VaultKv => new[] { "baseUrl", "secretPath" },
             DeploymentTargetType.FileSystem => new[] { "outputDirectory", "certificateFile", "privateKeyFile", "fullChainFile" },
             DeploymentTargetType.Kubernetes => new[] { "apiServer", "namespace", "secretName" },
+            DeploymentTargetType.AwsAcm => new[] { "region", "authenticationMode" },
             _ => []
         };
         var missing = required.Where(name =>
