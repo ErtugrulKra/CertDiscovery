@@ -20,9 +20,6 @@ public sealed class AcmeCertificateRequest
     public string? DnsTxtValue { get; set; }
     public string? AcmeAccountKeyPem { get; set; }
     public string? AcmeOrderLocation { get; set; }
-    public string? CertificatePrivateKeyPem { get; set; }
-    public string? CertificatePem { get; set; }
-    public string? FullChainPem { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTime? DnsPublishedAtUtc { get; set; }
     public string? DnsPublishStatus { get; set; }

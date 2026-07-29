@@ -102,7 +102,7 @@ public sealed class DeploymentArchitectureTests
     private static CertificateDeploymentOrchestrator CreateOrchestrator(CertificateDiscoveryDbContext db)
     {
         var fake = new FakeCertificateDeployer();
-        return new(db, new CertificateDeployerResolver([fake]), new DeploymentStateMachine(), new DeploymentQueue(db), new NoopSecrets());
+        return new(db, new CertificateDeployerResolver([fake]), new DeploymentStateMachine(), new DeploymentQueue(db), new NoopSecrets(), new TestBundleSource());
     }
 
     private sealed class NoopSecrets : ISecretProvider
@@ -110,6 +110,12 @@ public sealed class DeploymentArchitectureTests
         public Task<string> StoreAsync(string purpose, string value, CancellationToken cancellationToken) => Task.FromResult("secret");
         public Task<string> GetAsync(string secretReference, CancellationToken cancellationToken) => Task.FromResult("value");
         public Task DeleteAsync(string secretReference, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class TestBundleSource : IDeploymentCertificateBundleSource
+    {
+        public Task<IssuedCertificateBundle> LoadAsync(CertificateDeployment deployment, CancellationToken cancellationToken) =>
+            Task.FromResult(new IssuedCertificateBundle("certificate", "private-key", "chain", deployment.ExpectedFingerprint));
     }
 
     private sealed class DbFixture(SqliteConnection connection, CertificateDiscoveryDbContext db) : IAsyncDisposable
@@ -135,8 +141,7 @@ public sealed class DeploymentArchitectureTests
             var request = new AcmeCertificateRequest
             {
                 Domain = "example.com", AcmeProvider = provider, VaultServer = vault, VaultSecretPath = "secret/cert",
-                Status = CertificateRequestStatus.StoredInVault, Certificate = certificate,
-                CertificatePem = "certificate", CertificatePrivateKeyPem = "private-key", FullChainPem = "chain"
+                Status = CertificateRequestStatus.StoredInVault, Certificate = certificate
             };
             Db.Add(request);
             Db.SaveChanges();

@@ -128,12 +128,6 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CertificateId")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("CertificatePem")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CertificatePrivateKeyPem")
-                        .HasColumnType("TEXT");
-
                     b.Property<DateTime?>("ChallengeCreatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -174,9 +168,6 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2048)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FullChainPem")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("IssuedAtUtc")
@@ -339,6 +330,79 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("AcmeProviders");
+                });
+
+            modelBuilder.Entity("CertificateDiscovery.Domain.Entities.AgentDeploymentJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("CertificateDeploymentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClaimedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeploymentAgentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LeaseExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LeaseTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ObservedFingerprint")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PreviousFingerprint")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stage")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetConfigurationJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CertificateDeploymentId")
+                        .IsUnique();
+
+                    b.HasIndex("DeploymentAgentId", "Status", "CreatedAtUtc");
+
+                    b.ToTable("AgentDeploymentJobs");
                 });
 
             modelBuilder.Entity("CertificateDiscovery.Domain.Entities.AppSetting", b =>
@@ -829,6 +893,216 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                     b.ToTable("CertificateSubjectAlternativeNames");
                 });
 
+            modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DeploymentAgent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthenticationTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CapabilitiesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastHeartbeatAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MachineName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperatingSystem")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicKeyPem")
+                        .HasMaxLength(16384)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RegisteredAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LastHeartbeatAtUtc");
+
+                    b.HasIndex("MachineName");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("DeploymentAgents");
+                });
+
+            modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DeploymentAgentRegistrationExchange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CapabilitiesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExchangeSecretHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MachineName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperatingSystem")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicKeyFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicKeyPem")
+                        .IsRequired()
+                        .HasMaxLength(16384)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RegisteredAgentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RejectedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectedBy")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExchangeSecretHash")
+                        .IsUnique();
+
+                    b.HasIndex("RegisteredAgentId");
+
+                    b.HasIndex("UserCode")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "ExpiresAtUtc");
+
+                    b.ToTable("DeploymentAgentRegistrationExchanges");
+                });
+
+            modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DeploymentAgentRegistrationToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RegisteredAgentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("DeploymentAgentRegistrationTokens");
+                });
+
             modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DeploymentAuditEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -995,6 +1269,9 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("DeploymentAgentId")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER");
 
@@ -1018,6 +1295,8 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssetId");
+
+                    b.HasIndex("DeploymentAgentId");
 
                     b.HasIndex("IsEnabled");
 
@@ -1761,6 +2040,25 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                     b.Navigation("VaultServer");
                 });
 
+            modelBuilder.Entity("CertificateDiscovery.Domain.Entities.AgentDeploymentJob", b =>
+                {
+                    b.HasOne("CertificateDiscovery.Domain.Entities.CertificateDeployment", "CertificateDeployment")
+                        .WithMany()
+                        .HasForeignKey("CertificateDeploymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CertificateDiscovery.Domain.Entities.DeploymentAgent", "DeploymentAgent")
+                        .WithMany()
+                        .HasForeignKey("DeploymentAgentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CertificateDeployment");
+
+                    b.Navigation("DeploymentAgent");
+                });
+
             modelBuilder.Entity("CertificateDiscovery.Domain.Entities.AssetCertificate", b =>
                 {
                     b.HasOne("CertificateDiscovery.Domain.Entities.Asset", "Asset")
@@ -1837,6 +2135,16 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                     b.Navigation("Certificate");
                 });
 
+            modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DeploymentAgentRegistrationExchange", b =>
+                {
+                    b.HasOne("CertificateDiscovery.Domain.Entities.DeploymentAgent", "RegisteredAgent")
+                        .WithMany()
+                        .HasForeignKey("RegisteredAgentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("RegisteredAgent");
+                });
+
             modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DeploymentAuditEvent", b =>
                 {
                     b.HasOne("CertificateDiscovery.Domain.Entities.CertificateDeployment", "CertificateDeployment")
@@ -1866,7 +2174,14 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("CertificateDiscovery.Domain.Entities.DeploymentAgent", "DeploymentAgent")
+                        .WithMany("DeploymentTargets")
+                        .HasForeignKey("DeploymentAgentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Asset");
+
+                    b.Navigation("DeploymentAgent");
                 });
 
             modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DiscoveredEndpoint", b =>
@@ -1991,6 +2306,11 @@ namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
                     b.Navigation("ChainEntries");
 
                     b.Navigation("SubjectAlternativeNames");
+                });
+
+            modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DeploymentAgent", b =>
+                {
+                    b.Navigation("DeploymentTargets");
                 });
 
             modelBuilder.Entity("CertificateDiscovery.Domain.Entities.DiscoveryJob", b =>

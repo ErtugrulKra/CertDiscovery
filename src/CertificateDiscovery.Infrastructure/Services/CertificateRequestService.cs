@@ -10,6 +10,8 @@ using CertificateDiscovery.Domain;
 using CertificateDiscovery.Domain.Entities;
 using CertificateDiscovery.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 public sealed class CertificateRequestService(
     CertificateDiscoveryDbContext db,
@@ -22,6 +24,12 @@ public sealed class CertificateRequestService(
 {
     private static readonly TimeSpan AutomaticDnsPropagationDelay = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan AutomaticRenewalRetryDelay = TimeSpan.FromMinutes(15);
+
+    private static string CertificateFingerprint(string certificatePem)
+    {
+        using var certificate = X509Certificate2.CreateFromPem(certificatePem);
+        return Convert.ToHexString(SHA256.HashData(certificate.RawData));
+    }
 
     public async Task<List<CertificateRequestListDto>> ListAsync(CancellationToken cancellationToken) =>
         await db.AcmeCertificateRequests
@@ -198,19 +206,16 @@ public sealed class CertificateRequestService(
                 : new AcmeAccountCredentials(Guid.Empty, string.Empty, request.AcmeAccountKeyPem!);
             var order = new AcmeOrderContext(account.AccountKeyPem, request.AcmeOrderLocation, []);
             var bundle = await acmeClient.ValidateAndFinalizeAsync(request.AcmeProvider!, account, order, request.Domain, cancellationToken);
-            request.CertificatePrivateKeyPem = bundle.PrivateKeyPem;
-            request.CertificatePem = bundle.CertificatePem;
-            request.FullChainPem = bundle.FullChainPem;
             stateMachine.Transition(request, CertificateRequestStatus.Issued);
             request.IssuedAtUtc = DateTime.UtcNow;
             request.UpdatedAtUtc = DateTime.UtcNow;
 
             var domains = GetDomains(request);
+            var stored = await certificateStore.StoreAsync(
+                new CertificateStoreContext(request, request.VaultServer!, request.AcmeProvider, domains, bundle.CertificatePem, bundle.PrivateKeyPem, bundle.FullChainPem, CertificateFingerprint(bundle.CertificatePem)),
+                cancellationToken);
             request.CertificateId = await inventoryWriter.UpsertAsync(
                 new CertificateInventoryContext(request, request.AcmeProvider, domains, bundle.CertificatePem, bundle.FullChainPem),
-                cancellationToken);
-            var stored = await certificateStore.StoreAsync(
-                new CertificateStoreContext(request, request.VaultServer!, request.AcmeProvider, domains, bundle.CertificatePem, bundle.PrivateKeyPem, bundle.FullChainPem),
                 cancellationToken);
             stateMachine.Transition(request, CertificateRequestStatus.StoredInVault);
             request.StoredAtUtc = stored.StoredAtUtc;
@@ -505,9 +510,6 @@ public sealed class CertificateRequestService(
         request.DnsTxtValue = null;
         request.AcmeAccountKeyPem = null;
         request.AcmeOrderLocation = null;
-        request.CertificatePrivateKeyPem = null;
-        request.CertificatePem = null;
-        request.FullChainPem = null;
         request.ErrorMessage = null;
         request.DnsPublishedAtUtc = null;
         request.DnsPublishStatus = null;
@@ -613,7 +615,7 @@ public sealed class CertificateRequestService(
         new(request.Id, request.Domain, request.SubjectAlternativeNames, request.Status, request.AcmeProvider?.Name ?? "-", request.VaultServer?.Name ?? "-", request.VaultSecretPath, request.DnsProvider?.Name, request.CreatedAtUtc, request.IssuedAtUtc, request.StoredAtUtc, request.ScheduleCheck, request.RenewalThresholdDays, request.RenewalCronExpression, request.NextScheduleCheckAtUtc, request.LastScheduleCheckAtUtc, request.LastScheduleCheckStatus, request.LastScheduleCheckMessage, request.LastRenewalRequestId, request.ErrorMessage, request.AcmeAccountId);
 
     private static CertificateRequestDetailDto ToDetailDto(AcmeCertificateRequest request) =>
-        new(request.Id, request.Domain, GetDomains(request), request.SubjectAlternativeNames, request.ChallengeType, request.Status, request.AcmeProviderId, request.AcmeProvider?.Name ?? "-", request.AcmeProvider?.DirectoryUrl ?? new Uri("https://example.com"), request.VaultServerId, request.VaultServer?.Name ?? "-", request.DnsProviderId, request.DnsProvider?.Name, request.VaultSecretPath, request.DnsTxtName, request.DnsTxtValue, request.AcmeOrderLocation, request.CertificatePem, request.FullChainPem, request.ErrorMessage, request.DnsPublishedAtUtc, request.DnsPublishStatus, request.DnsPublishError, request.CertificateId, request.CreatedAtUtc, request.ChallengeCreatedAtUtc, request.IssuedAtUtc, request.StoredAtUtc, request.ScheduleCheck, request.RenewalThresholdDays, request.RenewalCronExpression, request.NextScheduleCheckAtUtc, request.LastScheduleCheckAtUtc, request.LastScheduleCheckStatus, request.LastScheduleCheckMessage, request.RenewedFromRequestId, request.LastRenewalRequestId, request.AcmeAccountId);
+        new(request.Id, request.Domain, GetDomains(request), request.SubjectAlternativeNames, request.ChallengeType, request.Status, request.AcmeProviderId, request.AcmeProvider?.Name ?? "-", request.AcmeProvider?.DirectoryUrl ?? new Uri("https://example.com"), request.VaultServerId, request.VaultServer?.Name ?? "-", request.DnsProviderId, request.DnsProvider?.Name, request.VaultSecretPath, request.DnsTxtName, request.DnsTxtValue, request.AcmeOrderLocation, request.ErrorMessage, request.DnsPublishedAtUtc, request.DnsPublishStatus, request.DnsPublishError, request.CertificateId, request.CreatedAtUtc, request.ChallengeCreatedAtUtc, request.IssuedAtUtc, request.StoredAtUtc, request.ScheduleCheck, request.RenewalThresholdDays, request.RenewalCronExpression, request.NextScheduleCheckAtUtc, request.LastScheduleCheckAtUtc, request.LastScheduleCheckStatus, request.LastScheduleCheckMessage, request.RenewedFromRequestId, request.LastRenewalRequestId, request.AcmeAccountId);
 
     private static VaultServerDto ToDto(VaultServer server) =>
         new(server.Id, server.Name, server.BaseUrl, server.Description, server.PkiMountPath, !string.IsNullOrWhiteSpace(server.Token), server.ScanPublicEndpoint, server.ImportPkiCertificates, server.IsEnabled, server.CreatedAtUtc, server.UpdatedAtUtc, server.LastSyncAtUtc, server.LastSyncStatus, server.LastSyncError);

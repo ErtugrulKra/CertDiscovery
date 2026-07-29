@@ -43,8 +43,6 @@ public sealed record CertificateRequestDetailDto(
     string? DnsTxtName,
     string? DnsTxtValue,
     string? AcmeOrderLocation,
-    string? CertificatePem,
-    string? FullChainPem,
     string? ErrorMessage,
     DateTime? DnsPublishedAtUtc,
     string? DnsPublishStatus,

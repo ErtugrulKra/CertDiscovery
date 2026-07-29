@@ -52,6 +52,8 @@ public static class DependencyInjection
         services.AddScoped<CertificateRequestService>();
         services.AddScoped<VaultDiscoveryService>();
         services.AddScoped<DeploymentService>();
+        services.AddScoped<DeploymentAgentService>();
+        services.AddScoped<AgentDeploymentJobService>();
         services.AddScoped<ICertificateInventoryWriter, CertificateInventoryWriter>();
         services.AddScoped<ICertificateRequestStateMachine, CertificateRequestStateMachine>();
         services.AddScoped<ISecretProvider, ProtectedDbSecretProvider>();
@@ -59,9 +61,14 @@ public static class DependencyInjection
         services.AddScoped<IAcmeAccountService, AcmeAccountService>();
         services.AddScoped<IDeploymentStateMachine, DeploymentStateMachine>();
         services.AddScoped<ICertificateBundleConverter, CertificateBundleConverter>();
+        services.AddScoped<IDeploymentCertificateBundleSource, VaultDeploymentCertificateBundleSource>();
         services.AddScoped<IDeploymentQueue, DeploymentQueue>();
         services.AddScoped<ICertificateDeploymentOrchestrator, CertificateDeploymentOrchestrator>();
         services.AddScoped<ICertificateDeployer, FakeCertificateDeployer>();
+        services.AddScoped<ICertificateDeployer, VaultKvCertificateDeployer>();
+        services.AddScoped<ICertificateDeployer, FileSystemCertificateDeployer>();
+        services.AddScoped<ICertificateDeployer, KubernetesTlsSecretDeployer>();
+        services.AddScoped<ICertificateDeployer, IisAgentCertificateDeployer>();
         services.AddScoped<ICertificateDeployerResolver, CertificateDeployerResolver>();
         services.AddAcmeServices();
         services.AddDnsChallengeProviders();

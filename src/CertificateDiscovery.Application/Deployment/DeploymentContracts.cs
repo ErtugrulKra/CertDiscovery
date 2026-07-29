@@ -4,12 +4,12 @@ using CertificateDiscovery.Domain.Entities;
 namespace CertificateDiscovery.Application.Deployment;
 
 public sealed record DeploymentTargetContext(DeploymentTarget Target, string? Secret);
-public sealed record DeploymentContext(CertificateDeployment Deployment, DeploymentTarget Target, DeploymentPolicy Policy);
+public sealed record DeploymentContext(CertificateDeployment Deployment, DeploymentTarget Target, DeploymentPolicy Policy, string? Secret = null);
 public sealed record IssuedCertificateBundle(string CertificatePem, string PrivateKeyPem, string FullChainPem, string Fingerprint);
 public sealed record DeploymentValidationResult(bool IsValid, string? Message = null);
 public sealed record DeploymentPrecheckResult(bool IsReady, string? PreviousFingerprint = null, string? Message = null);
 public sealed record DeploymentBackupResult(bool Succeeded, string? BackupReference = null, string? Message = null);
-public sealed record DeploymentApplyResult(bool Succeeded, string? Message = null);
+public sealed record DeploymentApplyResult(bool Succeeded, string? Message = null, bool PendingExternalCompletion = false);
 public sealed record DeploymentActivationResult(bool Succeeded, string? Message = null);
 public sealed record DeploymentVerificationResult(bool Succeeded, string? ObservedFingerprint = null, string? Message = null);
 public sealed record DeploymentRollbackResult(bool Succeeded, string? ObservedFingerprint = null, string? Message = null);
@@ -35,6 +35,11 @@ public interface ICertificateDeployerResolver
 public interface ICertificateBundleConverter
 {
     ConvertedCertificateBundle Convert(IssuedCertificateBundle bundle, string pfxPassword);
+}
+
+public interface IDeploymentCertificateBundleSource
+{
+    Task<IssuedCertificateBundle> LoadAsync(CertificateDeployment deployment, CancellationToken cancellationToken);
 }
 
 public interface IDeploymentStateMachine

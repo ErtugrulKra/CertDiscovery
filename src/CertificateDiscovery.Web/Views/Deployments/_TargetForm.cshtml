@@ -3,6 +3,13 @@
 <form method="post" class="asset-form"><div asp-validation-summary="ModelOnly" class="text-danger"></div><div class="row g-3">
 <div class="col-md-6"><label class="form-label" asp-for="Name"></label><input class="form-control" asp-for="Name" /></div>
 <div class="col-md-6"><label class="form-label" asp-for="TargetType"></label><select id="deployment-target-type" class="form-select" asp-for="TargetType" asp-items="Html.GetEnumSelectList<DeploymentTargetType>()"></select></div>
+<div id="iis-agent-field" class="col-12">
+    <label class="form-label" asp-for="DeploymentAgentId">Registered Microsoft IIS Agent</label>
+    <select class="form-select" asp-for="DeploymentAgentId" asp-items="ViewBag.MicrosoftIisAgents">
+        <option value="">Select the registered target machine...</option>
+    </select>
+    <small class="text-muted">Only online or busy agents registered with the Microsoft IIS capability can be assigned. Agent availability is checked again when deployment starts.</small>
+</div>
 <div class="col-12"><label class="form-label" asp-for="ConfigurationJson">Configuration JSON</label><textarea id="deployment-configuration" class="form-control font-monospace" asp-for="ConfigurationJson" rows="12"></textarea>
 <div class="d-flex justify-content-between mt-1"><small id="deployment-configuration-help" class="text-muted"></small><button id="apply-target-template" type="button" class="btn btn-sm btn-outline-secondary">Apply target template</button></div></div>
 <div class="col-md-6"><label class="form-label" asp-for="Secret">Secret</label><input class="form-control" type="password" asp-for="Secret" autocomplete="new-password" placeholder="Leave empty to keep existing" /></div>
@@ -13,15 +20,22 @@
     const type = document.getElementById('deployment-target-type');
     const configuration = document.getElementById('deployment-configuration');
     const help = document.getElementById('deployment-configuration-help');
+    const iisAgentField = document.getElementById('iis-agent-field');
     const templates = {
         '@((int)DeploymentTargetType.Fake)': { help: 'Test adapter configuration.', value: { failStage: null, previousFingerprint: null, observedFingerprint: null } },
-        '@((int)DeploymentTargetType.Iis)': { help: 'Microsoft IIS certificate store, site binding and application-pool settings.', value: { host: 'windows-server.example.com', managementPort: 5986, siteName: 'Default Web Site', bindingProtocol: 'https', bindingPort: 443, bindingHost: 'example.com', certificateStoreName: 'My', applicationPool: 'DefaultAppPool', restartApplicationPool: false } },
+        '@((int)DeploymentTargetType.Iis)': { help: 'Microsoft IIS deployment through the registered winDeployAgent.exe selected above. For CCS use deploymentMode CentralCertificateStore and set the CCS path/file name.', value: { siteName: 'Default Web Site', bindingProtocol: 'https', bindingIpAddress: '*', bindingPort: 443, bindingHost: 'example.com', sniEnabled: true, certificateStoreName: 'My', certificateStoreLocation: 'LocalMachine', deploymentMode: 'Binding', centralCertificateStorePath: null, pfxFileName: null, applicationPool: 'DefaultAppPool', restartApplicationPool: false } },
         '@((int)DeploymentTargetType.Nginx)': { help: 'NGNIX SSH connection, certificate paths and safe validation/reload commands.', value: { host: 'ngnix.example.com', sshPort: 22, certificatePath: '/etc/ngnix/tls/certificate.pem', privateKeyPath: '/etc/ngnix/tls/private-key.pem', fullChainPath: '/etc/ngnix/tls/full-chain.pem', validateCommand: 'ngnix -t', reloadCommand: 'systemctl reload ngnix' } },
         '@((int)DeploymentTargetType.HaProxy)': { help: 'HA Proxy SSH connection, combined PEM path and validation/reload commands.', value: { host: 'haproxy.example.com', sshPort: 22, pemBundlePath: '/etc/haproxy/certs/example.com.pem', configurationPath: '/etc/haproxy/haproxy.cfg', validateCommand: 'haproxy -c -f /etc/haproxy/haproxy.cfg', reloadCommand: 'systemctl reload haproxy' } },
         '@((int)DeploymentTargetType.Traefik)': { help: 'Traefik file-provider certificate paths and reload configuration.', value: { host: 'traefik.example.com', sshPort: 22, dynamicConfigurationPath: '/etc/traefik/dynamic/tls.yml', certificatePath: '/etc/traefik/tls/certificate.pem', privateKeyPath: '/etc/traefik/tls/private-key.pem', reloadCommand: 'systemctl reload traefik' } },
         '@((int)DeploymentTargetType.ApacheWebServer)': { help: 'Apache Web Server SSH connection, TLS paths and validation/reload commands.', value: { host: 'apache.example.com', sshPort: 22, virtualHost: 'example.com', certificatePath: '/etc/apache2/tls/certificate.pem', privateKeyPath: '/etc/apache2/tls/private-key.pem', chainPath: '/etc/apache2/tls/full-chain.pem', validateCommand: 'apachectl configtest', reloadCommand: 'systemctl reload apache2' } }
+        ,'@((int)DeploymentTargetType.VaultKv)': { help: 'HashiCorp Vault KV v2 endpoint and versioned certificate secret path. Store the Vault token in Secret.', value: { baseUrl: 'https://vault.example.com', secretPath: 'secret/certificates/example.com', namespace: null } }
+        ,'@((int)DeploymentTargetType.FileSystem)': { help: 'Atomic certificate export for a local or shared volume. Secret is used as the PFX password when pfxFile is configured.', value: { outputDirectory: '/var/lib/certdiscovery/exports/example.com', certificateFile: 'certificate.pem', privateKeyFile: 'private-key.pem', fullChainFile: 'fullchain.pem', pfxFile: 'certificate.pfx', privateKeyUnixMode: '600', publicFileUnixMode: '644', backupRetention: 5 } }
+        ,'@((int)DeploymentTargetType.Kubernetes)': { help: 'Kubernetes TLS Secret using minimum namespace-scoped RBAC. Store the service-account bearer token in Secret.', value: { apiServer: 'https://kubernetes.default.svc', namespace: 'default', secretName: 'example-com-tls', createIfMissing: true, caBundleField: null, annotations: { 'app.kubernetes.io/managed-by': 'certdiscovery' }, restartWorkloads: [] } }
     };
-    const updateHelp = () => help.textContent = templates[type.value]?.help ?? 'Provider-specific JSON configuration.';
+    const updateHelp = () => {
+        help.textContent = templates[type.value]?.help ?? 'Provider-specific JSON configuration.';
+        iisAgentField.hidden = type.value !== '@((int)DeploymentTargetType.Iis)';
+    };
     document.getElementById('apply-target-template').addEventListener('click', () => {
         const template = templates[type.value];
         if (template) configuration.value = JSON.stringify(template.value, null, 2);

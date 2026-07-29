@@ -7,6 +7,8 @@ public sealed class DeploymentTarget
     public DeploymentTargetType TargetType { get; set; } = DeploymentTargetType.Fake;
     public Guid? AssetId { get; set; }
     public Asset? Asset { get; set; }
+    public Guid? DeploymentAgentId { get; set; }
+    public DeploymentAgent? DeploymentAgent { get; set; }
     public string ConfigurationJson { get; set; } = "{}";
     public string? SecretReference { get; set; }
     public bool IsEnabled { get; set; } = true;

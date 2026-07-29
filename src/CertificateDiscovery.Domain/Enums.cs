@@ -41,7 +41,9 @@ public enum DeploymentTargetType
     [Display(Name = "AWS Load Balancer")] AwsLoadBalancer,
     [Display(Name = "HA Proxy")] HaProxy,
     [Display(Name = "Traefik")] Traefik,
-    [Display(Name = "Apache Web Server")] ApacheWebServer
+    [Display(Name = "Apache Web Server")] ApacheWebServer,
+    [Display(Name = "Vault KV")] VaultKv,
+    [Display(Name = "File System Export")] FileSystem
 }
 public enum CertificateDeploymentStatus
 {
@@ -50,3 +52,9 @@ public enum CertificateDeploymentStatus
 }
 public enum DeploymentJobStatus { Pending, Claimed, Completed, DeadLetter, Cancelled }
 public enum DeploymentOrigin { Manual, Automatic, Retry }
+public enum DeploymentAgentStatus
+{
+    PendingRegistration, Online, Busy, Stale, Offline, Disabled, Revoked, UpgradeRequired
+}
+public enum AgentDeploymentJobStatus { Pending, Claimed, Completed, Failed, RolledBack, DeadLetter }
+public enum DeploymentAgentExchangeStatus { Pending, Approved, Rejected, Expired, Completed }

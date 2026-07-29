@@ -6,8 +6,8 @@
 @if (TempData["DeploymentMessage"] is string message) { <div class="alert alert-success">@message</div> }
 @if (TempData["DeploymentError"] is string error) { <div class="alert alert-danger">@error</div> }
 <section class="panel"><div class="panel-header"><h2>Targets</h2></div><div class="table-responsive"><table class="table table-sm">
-<thead><tr><th>Name</th><th>Type</th><th>Secret</th><th>Enabled</th><th></th></tr></thead><tbody>
-@foreach (var item in Model.Targets) { <tr><td>@item.Name</td><td>@item.TargetType.GetDisplayName()</td><td>@(item.HasSecret ? "Configured" : "None")</td><td>@item.IsEnabled</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" asp-action="EditTarget" asp-route-id="@item.Id">Edit</a> <form class="d-inline" method="post" asp-action="TestTarget" asp-route-id="@item.Id"><button class="btn btn-sm btn-outline-primary">Test</button></form></td></tr> }
+<thead><tr><th>Name</th><th>Type</th><th>Registered agent</th><th>Secret</th><th>Enabled</th><th></th></tr></thead><tbody>
+@foreach (var item in Model.Targets) { <tr><td>@item.Name</td><td>@item.TargetType.GetDisplayName()</td><td>@(item.DeploymentAgentName ?? "-")</td><td>@(item.HasSecret ? "Configured" : "None")</td><td>@item.IsEnabled</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" asp-action="EditTarget" asp-route-id="@item.Id">Edit</a> <form class="d-inline" method="post" asp-action="TestTarget" asp-route-id="@item.Id"><button class="btn btn-sm btn-outline-primary">Test</button></form></td></tr> }
 </tbody></table></div></section>
 <section class="panel"><div class="panel-header"><h2>Policies</h2></div><div class="table-responsive"><table class="table table-sm">
 <thead><tr><th>Name</th><th>Approval</th><th>Automatic</th><th>Attempts</th><th>Rollback</th></tr></thead><tbody>

@@ -91,13 +91,10 @@ public sealed class CertificateRequestServiceCharacterizationTests
         var handler = new VaultHandler();
         await using var fixture = await RequestFixture.CreateAsync(handler);
         var request = fixture.SeedRequest(CertificateRequestStatus.Issued);
-        request.CertificatePem = "leaf-pem";
-        request.FullChainPem = "chain-pem";
-        request.CertificatePrivateKeyPem = "private-key-pem";
         request.IssuedAtUtc = DateTime.UtcNow;
 
         await fixture.Store.StoreAsync(
-            new CertificateStoreContext(request, fixture.Vault, fixture.Acme, ["example.com"], "leaf-pem", "private-key-pem", "chain-pem"),
+            new CertificateStoreContext(request, fixture.Vault, fixture.Acme, ["example.com"], "leaf-pem", "private-key-pem", "chain-pem", "ABC123"),
             CancellationToken.None);
 
         Assert.Equal("/v1/secret/data/certificates/example.com", handler.Path);
@@ -105,6 +102,7 @@ public sealed class CertificateRequestServiceCharacterizationTests
         Assert.Contains("\"certificate_pem\":\"leaf-pem\"", handler.Body);
         Assert.Contains("\"private_key_pem\":\"private-key-pem\"", handler.Body);
         Assert.Contains("\"fullchain_pem\":\"chain-pem\"", handler.Body);
+        Assert.Contains("\"fingerprint_sha256\":\"ABC123\"", handler.Body);
     }
 
     [Fact]
@@ -334,7 +332,7 @@ public sealed class CertificateRequestServiceCharacterizationTests
             Path = request.RequestUri!.AbsolutePath;
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
             VaultToken = request.Headers.GetValues("X-Vault-Token").Single();
-            return new HttpResponseMessage(HttpStatusCode.OK);
+            return Json("""{"data":{"version":1}}""");
         }
     }
 

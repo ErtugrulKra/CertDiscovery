@@ -9,5 +9,5 @@ public sealed record CertificateStoreContext(
     IReadOnlyList<string> Domains,
     string CertificatePem,
     string PrivateKeyPem,
-    string FullChainPem);
-
+    string FullChainPem,
+    string Fingerprint);

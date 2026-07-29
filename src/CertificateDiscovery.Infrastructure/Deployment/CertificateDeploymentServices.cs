@@ -131,7 +131,8 @@ public sealed class CertificateDeploymentOrchestrator(
     ICertificateDeployerResolver resolver,
     IDeploymentStateMachine stateMachine,
     IDeploymentQueue queue,
-    ISecretProvider secrets) : ICertificateDeploymentOrchestrator
+    ISecretProvider secrets,
+    IDeploymentCertificateBundleSource bundleSource) : ICertificateDeploymentOrchestrator
 {
     public async Task<Guid> CreateAsync(Guid requestId, Guid targetId, Guid policyId, string actor, DeploymentOrigin origin, CancellationToken cancellationToken)
     {
@@ -200,9 +201,9 @@ public sealed class CertificateDeploymentOrchestrator(
         var deployment = await LoadAsync(deploymentId, cancellationToken);
         if (deployment.Status != CertificateDeploymentStatus.Pending) return;
         var deployer = resolver.Resolve(deployment.DeploymentTarget.TargetType);
-        var context = new DeploymentContext(deployment, deployment.DeploymentTarget, deployment.DeploymentPolicy);
         var secret = string.IsNullOrWhiteSpace(deployment.DeploymentTarget.SecretReference) ? null : await secrets.GetAsync(deployment.DeploymentTarget.SecretReference, cancellationToken);
-        var bundle = BuildBundle(deployment);
+        var context = new DeploymentContext(deployment, deployment.DeploymentTarget, deployment.DeploymentPolicy, secret);
+        var bundle = await bundleSource.LoadAsync(deployment, cancellationToken);
         var backup = new DeploymentBackupResult(false);
         deployment.Attempt++;
         deployment.StartedAtUtc ??= DateTime.UtcNow;
@@ -221,6 +222,12 @@ public sealed class CertificateDeploymentOrchestrator(
             await MoveAsync(deployment, CertificateDeploymentStatus.Deploying, actor, cancellationToken);
             var applied = await deployer.DeployAsync(context, bundle, cancellationToken);
             Ensure(applied.Succeeded, "DeployFailed", applied.Message);
+            if (applied.PendingExternalCompletion)
+            {
+                Audit(deployment, "AgentJobQueued", actor, applied.Message ?? "Deployment was handed to an external agent.");
+                await db.SaveChangesAsync(cancellationToken);
+                return;
+            }
             await MoveAsync(deployment, CertificateDeploymentStatus.Activating, actor, cancellationToken);
             var activation = await deployer.ActivateAsync(context, cancellationToken);
             Ensure(activation.Succeeded, "ActivationFailed", activation.Message);
@@ -260,7 +267,8 @@ public sealed class CertificateDeploymentOrchestrator(
         var deployment = await LoadAsync(deploymentId, cancellationToken);
         if (string.IsNullOrWhiteSpace(deployment.BackupReference)) throw new InvalidOperationException("Deployment has no backup reference.");
         var deployer = resolver.Resolve(deployment.DeploymentTarget.TargetType);
-        await RollbackCoreAsync(deployment, deployer, new(deployment, deployment.DeploymentTarget, deployment.DeploymentPolicy),
+        var secret = string.IsNullOrWhiteSpace(deployment.DeploymentTarget.SecretReference) ? null : await secrets.GetAsync(deployment.DeploymentTarget.SecretReference, cancellationToken);
+        await RollbackCoreAsync(deployment, deployer, new(deployment, deployment.DeploymentTarget, deployment.DeploymentPolicy, secret),
             new(true, deployment.BackupReference), actor, cancellationToken);
     }
 
@@ -280,7 +288,7 @@ public sealed class CertificateDeploymentOrchestrator(
 
     private async Task<CertificateDeployment> LoadAsync(Guid id, CancellationToken cancellationToken) =>
         await db.CertificateDeployments.Include(x => x.DeploymentTarget).Include(x => x.DeploymentPolicy)
-            .Include(x => x.CertificateRequest).Include(x => x.Certificate)
+            .Include(x => x.CertificateRequest).ThenInclude(x => x.VaultServer).Include(x => x.Certificate)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
         ?? throw new InvalidOperationException("Certificate deployment was not found.");
 
@@ -289,14 +297,6 @@ public sealed class CertificateDeploymentOrchestrator(
         stateMachine.Transition(deployment, status);
         Audit(deployment, status.ToString(), actor, $"Deployment entered {status}.");
         await db.SaveChangesAsync(cancellationToken);
-    }
-
-    private static IssuedCertificateBundle BuildBundle(CertificateDeployment deployment)
-    {
-        var request = deployment.CertificateRequest;
-        if (string.IsNullOrWhiteSpace(request.CertificatePem) || string.IsNullOrWhiteSpace(request.CertificatePrivateKeyPem))
-            throw new InvalidOperationException("Issued certificate bundle is not available on the request.");
-        return new(request.CertificatePem, request.CertificatePrivateKeyPem, request.FullChainPem ?? request.CertificatePem, deployment.ExpectedFingerprint);
     }
 
     private void Audit(CertificateDeployment deployment, string type, string actor, string? message) =>

@@ -17,7 +17,7 @@ public sealed class DeploymentService(
     IDeploymentQueue queue)
 {
     public async Task<DeploymentIndexDto> GetIndexAsync(CancellationToken cancellationToken) => new(
-        await db.DeploymentTargets.AsNoTracking().OrderBy(x => x.Name).Select(x => ToDto(x)).ToListAsync(cancellationToken),
+        await db.DeploymentTargets.AsNoTracking().Include(x => x.DeploymentAgent).OrderBy(x => x.Name).Select(x => ToDto(x)).ToListAsync(cancellationToken),
         await db.DeploymentPolicies.AsNoTracking().OrderBy(x => x.Name).Select(x => ToDto(x)).ToListAsync(cancellationToken),
         await DeploymentQuery().OrderByDescending(x => x.CreatedAtUtc).Select(x => ToDto(x)).ToListAsync(cancellationToken));
 
@@ -33,11 +33,13 @@ public sealed class DeploymentService(
 
     public async Task CreateTargetAsync(DeploymentTargetUpsertRequest request, CancellationToken cancellationToken)
     {
-        ValidateTarget(request);
+        ValidateTargetConfiguration(request);
+        await ValidateDeploymentAgentAsync(request, cancellationToken);
         var target = new DeploymentTarget
         {
             Name = request.Name.Trim(), TargetType = request.TargetType, AssetId = request.AssetId,
-            ConfigurationJson = NormalizeJson(request.ConfigurationJson), IsEnabled = request.IsEnabled
+            DeploymentAgentId = request.TargetType == DeploymentTargetType.Iis ? request.DeploymentAgentId : null,
+            ConfigurationJson = NormalizeTargetJson(request), IsEnabled = request.IsEnabled
         };
         if (!string.IsNullOrWhiteSpace(request.Secret))
             target.SecretReference = await secrets.StoreAsync($"deployment-target:{target.Id:D}", request.Secret, cancellationToken);
@@ -48,16 +50,18 @@ public sealed class DeploymentService(
     public async Task<DeploymentTargetUpsertRequest?> GetTargetAsync(Guid id, CancellationToken cancellationToken)
     {
         var target = await db.DeploymentTargets.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
-        return target is null ? null : new(target.Name, target.TargetType, target.AssetId, target.ConfigurationJson, null, target.IsEnabled);
+        return target is null ? null : new(target.Name, target.TargetType, target.AssetId, target.ConfigurationJson, null, target.IsEnabled, target.DeploymentAgentId);
     }
 
     public async Task<bool> UpdateTargetAsync(Guid id, DeploymentTargetUpsertRequest request, CancellationToken cancellationToken)
     {
-        ValidateTarget(request);
+        ValidateTargetConfiguration(request);
+        await ValidateDeploymentAgentAsync(request, cancellationToken);
         var target = await db.DeploymentTargets.FindAsync([id], cancellationToken);
         if (target is null) return false;
         target.Name = request.Name.Trim(); target.TargetType = request.TargetType; target.AssetId = request.AssetId;
-        target.ConfigurationJson = NormalizeJson(request.ConfigurationJson); target.IsEnabled = request.IsEnabled; target.UpdatedAtUtc = DateTime.UtcNow;
+        target.DeploymentAgentId = request.TargetType == DeploymentTargetType.Iis ? request.DeploymentAgentId : null;
+        target.ConfigurationJson = NormalizeTargetJson(request); target.IsEnabled = request.IsEnabled; target.UpdatedAtUtc = DateTime.UtcNow;
         if (!string.IsNullOrWhiteSpace(request.Secret))
         {
             var old = target.SecretReference;
@@ -66,6 +70,21 @@ public sealed class DeploymentService(
         }
         await db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<IReadOnlyList<DeploymentAgentOptionDto>> GetMicrosoftIisAgentOptionsAsync(
+        Guid? includeAgentId,
+        CancellationToken cancellationToken)
+    {
+        var agents = await db.DeploymentAgents.AsNoTracking()
+            .Where(x => x.AgentType == "MicrosoftIis" || x.Id == includeAgentId)
+            .OrderBy(x => x.MachineName).ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+        return agents
+            .Where(x => HasMicrosoftIisCapability(x) || x.Id == includeAgentId)
+            .Select(x => new DeploymentAgentOptionDto(
+                x.Id, x.Name, x.MachineName, EffectiveAgentStatus(x), IsAgentSelectable(x)))
+            .ToList();
     }
 
     public async Task TestTargetAsync(Guid id, CancellationToken cancellationToken)
@@ -93,6 +112,37 @@ public sealed class DeploymentService(
 
     public Task<Guid> CreateDeploymentAsync(DeploymentCreateRequest request, string actor, CancellationToken cancellationToken) =>
         orchestrator.CreateAsync(request.CertificateRequestId, request.DeploymentTargetId, request.DeploymentPolicyId, actor, DeploymentOrigin.Manual, cancellationToken);
+
+    public async Task<DeploymentCreateOptionsDto> GetDeploymentCreateOptionsAsync(CancellationToken cancellationToken) => new(
+        await db.AcmeCertificateRequests.AsNoTracking()
+            .Where(x => x.Status == CertificateRequestStatus.StoredInVault && x.CertificateId != null)
+            .OrderBy(x => x.Domain)
+            .Select(x => new DeploymentCertificateOptionDto(
+                x.Id,
+                x.Domain,
+                x.VaultSecretPath,
+                x.Certificate!.FingerprintSha256,
+                x.StoredAtUtc))
+            .ToListAsync(cancellationToken),
+        await db.DeploymentTargets.AsNoTracking()
+            .Where(x => x.IsEnabled)
+            .OrderBy(x => x.Name)
+            .Select(x => new DeploymentTargetOptionDto(
+                x.Id,
+                x.Name,
+                x.TargetType,
+                x.DeploymentAgent == null ? null : $"{x.DeploymentAgent.Name} ({x.DeploymentAgent.MachineName})"))
+            .ToListAsync(cancellationToken),
+        await db.DeploymentPolicies.AsNoTracking()
+            .Where(x => x.IsEnabled)
+            .OrderBy(x => x.Name)
+            .Select(x => new DeploymentPolicyOptionDto(
+                x.Id,
+                x.Name,
+                x.RequireApproval,
+                x.AutomaticDeployment,
+                x.RollbackOnFailure))
+            .ToListAsync(cancellationToken));
     public Task ApproveAsync(Guid id, string actor, CancellationToken token) => orchestrator.ApproveAsync(id, actor, token);
     public Task RejectAsync(Guid id, string actor, CancellationToken token) => orchestrator.RejectAsync(id, actor, token);
     public Task CancelAsync(Guid id, string actor, CancellationToken token) => orchestrator.CancelAsync(id, actor, token);
@@ -119,20 +169,24 @@ public sealed class DeploymentService(
         x.ErrorCode, x.ErrorMessage, x.BackupReference, x.RollbackStatus, x.VerificationStatus, x.RequestedBy,
         x.ApprovedBy, x.CreatedAtUtc, x.StartedAtUtc, x.CompletedAtUtc);
     private static DeploymentTargetDto ToDto(DeploymentTarget x) => new(x.Id, x.Name, x.TargetType, x.AssetId, x.ConfigurationJson,
-        !string.IsNullOrWhiteSpace(x.SecretReference), x.IsEnabled, x.CreatedAtUtc, x.UpdatedAtUtc);
+        !string.IsNullOrWhiteSpace(x.SecretReference), x.IsEnabled, x.CreatedAtUtc, x.UpdatedAtUtc,
+        x.DeploymentAgentId, x.DeploymentAgent == null ? null : $"{x.DeploymentAgent.Name} ({x.DeploymentAgent.MachineName})");
     private static DeploymentPolicyDto ToDto(DeploymentPolicy x) => new(x.Id, x.Name, x.RequireApproval, x.AutomaticDeployment,
         x.MaxAttempts, x.RetryDelaySeconds, x.RollbackOnFailure, x.VerificationTimeoutSeconds, x.DeploymentWindow, x.IsEnabled);
-    private static void ValidateTarget(DeploymentTargetUpsertRequest request)
+    private static void ValidateTargetConfiguration(DeploymentTargetUpsertRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name)) throw new ArgumentException("Target name is required.");
         using var configuration = JsonDocument.Parse(NormalizeJson(request.ConfigurationJson));
         var required = request.TargetType switch
         {
-            DeploymentTargetType.Iis => new[] { "host", "siteName", "bindingPort", "certificateStoreName" },
+            DeploymentTargetType.Iis => new[] { "siteName", "bindingPort", "certificateStoreName" },
             DeploymentTargetType.Nginx => new[] { "host", "certificatePath", "privateKeyPath", "validateCommand", "reloadCommand" },
             DeploymentTargetType.HaProxy => new[] { "host", "pemBundlePath", "configurationPath", "validateCommand", "reloadCommand" },
             DeploymentTargetType.Traefik => new[] { "host", "dynamicConfigurationPath", "certificatePath", "privateKeyPath" },
             DeploymentTargetType.ApacheWebServer => new[] { "host", "virtualHost", "certificatePath", "privateKeyPath", "validateCommand", "reloadCommand" },
+            DeploymentTargetType.VaultKv => new[] { "baseUrl", "secretPath" },
+            DeploymentTargetType.FileSystem => new[] { "outputDirectory", "certificateFile", "privateKeyFile", "fullChainFile" },
+            DeploymentTargetType.Kubernetes => new[] { "apiServer", "namespace", "secretName" },
             _ => []
         };
         var missing = required.Where(name =>
@@ -141,6 +195,65 @@ public sealed class DeploymentService(
             value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())).ToList();
         if (missing.Count > 0)
             throw new ArgumentException($"{request.TargetType.GetDisplayName()} configuration requires: {string.Join(", ", missing)}.");
+    }
+
+    private async Task ValidateDeploymentAgentAsync(
+        DeploymentTargetUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.TargetType != DeploymentTargetType.Iis)
+        {
+            if (request.DeploymentAgentId is not null)
+                throw new ArgumentException("A deployment agent can only be selected for a Microsoft IIS target.");
+            return;
+        }
+        if (request.DeploymentAgentId is null || request.DeploymentAgentId == Guid.Empty)
+            throw new ArgumentException("Select a registered Microsoft IIS deployment agent.");
+        var agent = await db.DeploymentAgents.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == request.DeploymentAgentId, cancellationToken)
+            ?? throw new ArgumentException("The selected Microsoft IIS deployment agent was not found.");
+        if (!HasMicrosoftIisCapability(agent))
+            throw new ArgumentException("The selected agent does not support Microsoft IIS deployment.");
+        if (!IsAgentSelectable(agent))
+            throw new ArgumentException($"The selected Microsoft IIS deployment agent is {EffectiveAgentStatus(agent)} and cannot be assigned.");
+        if (string.IsNullOrWhiteSpace(agent.PublicKeyPem))
+            throw new ArgumentException("The selected Microsoft IIS deployment agent has no encryption public key.");
+    }
+
+    private static bool HasMicrosoftIisCapability(DeploymentAgent agent)
+    {
+        if (!string.Equals(agent.AgentType, "MicrosoftIis", StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            var capabilities = JsonSerializer.Deserialize<string[]>(agent.CapabilitiesJson) ?? [];
+            return capabilities.Contains("MicrosoftIis", StringComparer.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsAgentSelectable(DeploymentAgent agent) =>
+        agent.Status is DeploymentAgentStatus.Online or DeploymentAgentStatus.Busy &&
+        agent.LastHeartbeatAtUtc >= DateTime.UtcNow.AddMinutes(-2);
+
+    private static DeploymentAgentStatus EffectiveAgentStatus(DeploymentAgent agent) =>
+        agent.Status is DeploymentAgentStatus.Online or DeploymentAgentStatus.Busy &&
+        agent.LastHeartbeatAtUtc < DateTime.UtcNow.AddMinutes(-2)
+            ? DeploymentAgentStatus.Stale
+            : agent.Status;
+
+    private static string NormalizeTargetJson(DeploymentTargetUpsertRequest request)
+    {
+        using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(request.ConfigurationJson) ? "{}" : request.ConfigurationJson);
+        if (request.TargetType != DeploymentTargetType.Iis)
+            return JsonSerializer.Serialize(document.RootElement);
+        var values = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in document.RootElement.EnumerateObject())
+            if (!string.Equals(property.Name, "agentId", StringComparison.OrdinalIgnoreCase))
+                values[property.Name] = property.Value.Clone();
+        return JsonSerializer.Serialize(values);
     }
     private static string NormalizeJson(string value)
     {

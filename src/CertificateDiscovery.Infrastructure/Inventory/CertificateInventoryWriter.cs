@@ -37,7 +37,9 @@ public sealed class CertificateInventoryWriter(CertificateDiscoveryDbContext db)
         certificate.Source = CertificateSource.Acme;
         certificate.SourceName = context.AcmeProvider?.Name;
         certificate.ExternalReference = context.Request.VaultSecretPath;
-        certificate.PemEncodedCertificate = context.CertificatePem;
+        // Managed certificates are represented in the database by metadata only.
+        // Their certificate and key material lives exclusively in Vault.
+        certificate.PemEncodedCertificate = null;
         certificate.LastSeenAtUtc = DateTime.UtcNow;
 
         await db.SaveChangesAsync(cancellationToken);
@@ -66,7 +68,7 @@ public sealed class CertificateInventoryWriter(CertificateDiscoveryDbContext db)
                 PublicKeySize = GetPublicKeySize(entry.cert),
                 Version = entry.cert.Version,
                 IsSelfSigned = entry.cert.Subject == entry.cert.Issuer,
-                PemEncodedCertificate = PemEncode(entry.cert),
+                PemEncodedCertificate = null,
                 LastSeenAtUtc = DateTime.UtcNow
             });
         }
@@ -96,6 +98,5 @@ public sealed class CertificateInventoryWriter(CertificateDiscoveryDbContext db)
     }
 
     private static string Fingerprint(X509Certificate2 certificate) => Convert.ToHexString(SHA256.HashData(certificate.RawData));
-    private static string PemEncode(X509Certificate2 certificate) => "-----BEGIN CERTIFICATE-----\n" + Convert.ToBase64String(certificate.RawData, Base64FormattingOptions.InsertLineBreaks) + "\n-----END CERTIFICATE-----\n";
     private static int? GetPublicKeySize(X509Certificate2 certificate) => certificate.GetRSAPublicKey()?.KeySize ?? certificate.GetECDsaPublicKey()?.KeySize ?? certificate.GetDSAPublicKey()?.KeySize;
 }

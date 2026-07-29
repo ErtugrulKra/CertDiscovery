@@ -9,6 +9,8 @@ using CertificateDiscovery.Infrastructure.Persistence;
 using CertificateDiscovery.Infrastructure.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace CertificateDiscovery.UnitTests;
 
@@ -23,7 +25,11 @@ public sealed class CertificateRequestOrchestrationTests
 
         Assert.Equal(CertificateRequestStatus.StoredInVault, fixture.Request.Status);
         Assert.Equal(FakeInventoryWriter.CertificateId, fixture.Request.CertificateId);
-        Assert.Equal("certificate", fixture.Request.CertificatePem);
+        var requestProperties = fixture.Db.Model.FindEntityType(typeof(AcmeCertificateRequest))!
+            .GetProperties().Select(property => property.Name).ToHashSet();
+        Assert.DoesNotContain("CertificatePem", requestProperties);
+        Assert.DoesNotContain("CertificatePrivateKeyPem", requestProperties);
+        Assert.DoesNotContain("FullChainPem", requestProperties);
         Assert.NotNull(fixture.Request.IssuedAtUtc);
         Assert.NotNull(fixture.Request.StoredAtUtc);
         Assert.Equal(1, fixture.Inventory.WriteCount);
@@ -145,8 +151,15 @@ public sealed class CertificateRequestOrchestrationTests
         public Task<AcmeAccountRegistration> RegisterAccountAsync(AcmeProvider provider, string? eabKeyId, string? eabHmacKey, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<IssuedCertificateBundle> ValidateAndFinalizeAsync(AcmeProvider provider, AcmeAccountCredentials account, AcmeOrderContext order, string commonName, CancellationToken cancellationToken) =>
-            Task.FromResult(new IssuedCertificateBundle("certificate", "full-chain", "private-key"));
+        public Task<IssuedCertificateBundle> ValidateAndFinalizeAsync(AcmeProvider provider, AcmeAccountCredentials account, AcmeOrderContext order, string commonName, CancellationToken cancellationToken)
+        {
+            using var rsa = RSA.Create(2048);
+            var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                $"CN={commonName}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddDays(30));
+            var pem = certificate.ExportCertificatePem();
+            return Task.FromResult(new IssuedCertificateBundle(pem, pem, rsa.ExportPkcs8PrivateKeyPem()));
+        }
 
         public Task<AcmeOrderContext> CreateOrderAsync(AcmeProvider provider, AcmeAccountCredentials account, IReadOnlyList<string> domains, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

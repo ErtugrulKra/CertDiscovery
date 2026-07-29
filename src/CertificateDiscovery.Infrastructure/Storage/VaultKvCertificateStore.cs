@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using CertificateDiscovery.Application.Storage;
 
 namespace CertificateDiscovery.Infrastructure.Storage;
@@ -21,6 +22,7 @@ public sealed class VaultKvCertificateStore(IHttpClientFactory httpClientFactory
                 certificate_pem = context.CertificatePem,
                 private_key_pem = context.PrivateKeyPem,
                 fullchain_pem = context.FullChainPem,
+                fingerprint_sha256 = context.Fingerprint,
                 acme_provider = context.AcmeProvider?.Name,
                 issued_at_utc = context.Request.IssuedAtUtc,
                 certificate_request_id = context.Request.Id
@@ -28,7 +30,12 @@ public sealed class VaultKvCertificateStore(IHttpClientFactory httpClientFactory
         };
         using var response = await client.PostAsJsonAsync($"/v1/{mount}/data/{path}", payload, cancellationToken);
         response.EnsureSuccessStatusCode();
-        return new CertificateStoreResult(context.Request.VaultSecretPath, DateTime.UtcNow);
+        using var responseBody = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        var version = responseBody.RootElement.TryGetProperty("data", out var data) &&
+                      data.TryGetProperty("version", out var versionElement)
+            ? versionElement.GetInt32()
+            : (int?)null;
+        return new CertificateStoreResult(context.Request.VaultSecretPath, DateTime.UtcNow, version);
     }
 
     private static (string Mount, string Path) SplitVaultKvPath(string value)
