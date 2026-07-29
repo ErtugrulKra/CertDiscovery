@@ -378,7 +378,7 @@ Rollback may be disabled by policy for immutable/versioned targets.
 - [x] The IIS agent registers securely and receives only its own jobs.
 - [x] IIS bindings are updated through the agent while preserving SNI and host settings.
 - [x] IIS deployment can be verified and rolled back.
-- [ ] NGNIX/Apache SSH deployer works.
+- [x] NGNIX/Apache SSH deployer works.
 - [ ] AWS ACM deployer works.
 - [ ] Azure Key Vault deployer works.
 - [ ] Azure Application Gateway deployer works.

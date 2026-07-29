@@ -1,0 +1,19 @@
+services:
+  nginx-ssh:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    ports:
+      - "22221:22"
+      - "18443:443"
+    volumes:
+      - ./runtime:/integration:ro
+  apache-ssh:
+    build:
+      context: .
+      dockerfile: Dockerfile.apache
+    ports:
+      - "22222:22"
+      - "19443:443"
+    volumes:
+      - ./runtime:/integration:ro

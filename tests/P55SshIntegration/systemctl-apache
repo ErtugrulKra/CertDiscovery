@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+if [ "$1" = "reload" ] && { [ "$2" = "apache2" ] || [ "$2" = "httpd" ]; }; then
+  exec apachectl graceful
+fi
+exit 64

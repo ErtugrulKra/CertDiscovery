@@ -180,10 +180,10 @@ public sealed class DeploymentService(
         var required = request.TargetType switch
         {
             DeploymentTargetType.Iis => new[] { "siteName", "bindingPort", "certificateStoreName" },
-            DeploymentTargetType.Nginx => new[] { "host", "certificatePath", "privateKeyPath", "validateCommand", "reloadCommand" },
+            DeploymentTargetType.Nginx => new[] { "host", "username", "vaultBaseUrl", "sshKeySecretPath", "hostKeyFingerprint", "certificatePath", "privateKeyPath", "fullChainPath" },
             DeploymentTargetType.HaProxy => new[] { "host", "pemBundlePath", "configurationPath", "validateCommand", "reloadCommand" },
             DeploymentTargetType.Traefik => new[] { "host", "dynamicConfigurationPath", "certificatePath", "privateKeyPath" },
-            DeploymentTargetType.ApacheWebServer => new[] { "host", "virtualHost", "certificatePath", "privateKeyPath", "validateCommand", "reloadCommand" },
+            DeploymentTargetType.ApacheWebServer => new[] { "host", "username", "vaultBaseUrl", "sshKeySecretPath", "hostKeyFingerprint", "certificatePath", "privateKeyPath", "fullChainPath" },
             DeploymentTargetType.VaultKv => new[] { "baseUrl", "secretPath" },
             DeploymentTargetType.FileSystem => new[] { "outputDirectory", "certificateFile", "privateKeyFile", "fullChainFile" },
             DeploymentTargetType.Kubernetes => new[] { "apiServer", "namespace", "secretName" },

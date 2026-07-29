@@ -69,6 +69,11 @@ public static class DependencyInjection
         services.AddScoped<ICertificateDeployer, FileSystemCertificateDeployer>();
         services.AddScoped<ICertificateDeployer, KubernetesTlsSecretDeployer>();
         services.AddScoped<ICertificateDeployer, IisAgentCertificateDeployer>();
+        services.AddScoped<ISshCredentialSource, VaultSshCredentialSource>();
+        services.AddScoped<ISshRemoteClient, SshNetRemoteClient>();
+        services.AddScoped<ITlsEndpointVerifier, TlsEndpointVerifier>();
+        services.AddScoped<ICertificateDeployer, NginxSshCertificateDeployer>();
+        services.AddScoped<ICertificateDeployer, ApacheSshCertificateDeployer>();
         services.AddScoped<ICertificateDeployerResolver, CertificateDeployerResolver>();
         services.AddAcmeServices();
         services.AddDnsChallengeProviders();
