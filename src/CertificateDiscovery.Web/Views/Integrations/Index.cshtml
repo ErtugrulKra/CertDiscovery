@@ -1,4 +1,5 @@
 @model CertificateDiscovery.Contracts.IntegrationIndexDto
+@using CertificateDiscovery.Domain
 @{
     ViewData["Title"] = "Integrations";
 }
@@ -69,7 +70,7 @@
     </div>
     <div class="table-responsive">
         <table class="table table-sm align-middle">
-            <thead><tr><th>Name</th><th>Type</th><th>Zone</th><th>Token</th><th>Enabled</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Type</th><th>Zone</th><th>Credentials</th><th>Health</th><th>Enabled</th><th></th></tr></thead>
             <tbody>
             @foreach (var provider in Model.DnsProviders)
             {
@@ -77,10 +78,29 @@
                     <td>@provider.Name<div class="text-muted small">@provider.Notes</div></td>
                     <td>@provider.ProviderType</td>
                     <td><code>@provider.ZoneName</code></td>
-                    <td><span class="badge @(provider.HasApiToken ? "status-online" : "status-neutral")">@(provider.HasApiToken ? "Configured" : "Missing")</span></td>
+                    <td>
+                        @{
+                            var credentialsConfigured = provider.ProviderType switch
+                            {
+                                DnsProviderType.Cloudflare => provider.HasApiToken,
+                                DnsProviderType.Route53 when provider.AwsAuthenticationMode == AwsDnsAuthenticationMode.StaticCredentials => provider.HasAwsAccessKey && provider.HasAwsSecretKey,
+                                DnsProviderType.AzureDns when provider.AzureAuthenticationMode == AzureDnsAuthenticationMode.ServicePrincipal => provider.HasAzureClientSecret,
+                                _ => true
+                            };
+                        }
+                        <span class="badge @(credentialsConfigured ? "status-online" : "status-neutral")">@(credentialsConfigured ? "Configured" : "Missing")</span>
+                    </td>
+                    <td>
+                        <span class="badge @(provider.LastHealthCheckStatus == "Healthy" ? "status-online" : provider.LastHealthCheckStatus is null ? "status-neutral" : "status-warning")">@(provider.LastHealthCheckStatus ?? "Not tested")</span>
+                        @if (provider.LastHealthCheckAtUtc is not null) { <div class="small text-muted">@provider.LastHealthCheckAtUtc.Value.ToLocalTime().ToString("g")</div> }
+                        @if (!string.IsNullOrWhiteSpace(provider.LastHealthCheckError)) { <div class="small text-danger">@provider.LastHealthCheckError</div> }
+                    </td>
                     <td><span class="badge @(provider.IsEnabled ? "status-online" : "status-neutral")">@(provider.IsEnabled ? "Enabled" : "Disabled")</span></td>
                     <td class="text-end">
                         <a class="btn btn-outline-secondary btn-sm" asp-action="EditDns" asp-route-id="@provider.Id">Edit</a>
+                        <form method="post" asp-action="TestDns" asp-route-id="@provider.Id" class="d-inline">
+                            <button class="btn btn-outline-primary btn-sm">Test DNS</button>
+                        </form>
                         <form method="post" asp-action="DeleteDns" asp-route-id="@provider.Id" class="d-inline">
                             <button class="btn btn-outline-danger btn-sm">Delete</button>
                         </form>
@@ -107,12 +127,43 @@
                     <td>@provider.Name<div class="text-muted small">@provider.Notes</div></td>
                     <td>@provider.ProviderType</td>
                     <td><code>@provider.DirectoryUrl</code></td>
-                    <td>@provider.AccountEmail</td>
+                    <td>
+                        @provider.AccountEmail
+                        @if (provider.ActiveAccountId is not null)
+                        {
+                            <div class="small text-success">Active · last use @(provider.LastAccountUseAtUtc?.ToLocalTime().ToString("g") ?? "-")</div>
+                        }
+                        else
+                        {
+                            <div class="small text-muted">Not registered</div>
+                        }
+                    </td>
                     <td><span class="badge @(provider.HasExternalAccountBinding ? "status-online" : "status-neutral")">@(provider.HasExternalAccountBinding ? "Configured" : "None")</span></td>
                     <td><span class="badge @(provider.IsStaging ? "status-warning" : "status-online")">@(provider.IsStaging ? "Staging" : "Production")</span></td>
                     <td><span class="badge @(provider.IsEnabled ? "status-online" : "status-neutral")">@(provider.IsEnabled ? "Enabled" : "Disabled")</span></td>
                     <td class="text-end">
                         <a class="btn btn-outline-secondary btn-sm" asp-action="EditAcme" asp-route-id="@provider.Id">Edit</a>
+                        <form method="post" asp-action="TestAcmeDirectory" asp-route-id="@provider.Id" class="d-inline">
+                            <button class="btn btn-outline-primary btn-sm">Test directory</button>
+                        </form>
+                        @if (provider.ActiveAccountId is null)
+                        {
+                            <form method="post" asp-action="RegisterAcmeAccount" asp-route-id="@provider.Id" class="d-inline">
+                                <button class="btn btn-outline-primary btn-sm">Register account</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form method="post" asp-action="TestAcmeAccount" asp-route-id="@provider.Id" class="d-inline">
+                                <button class="btn btn-outline-primary btn-sm">Test account</button>
+                            </form>
+                            <form method="post" asp-action="DisableAcmeAccount" asp-route-id="@provider.Id" class="d-inline">
+                                <button class="btn btn-outline-warning btn-sm">Disable account</button>
+                            </form>
+                            <form method="post" asp-action="RotateAcmeAccountKey" asp-route-id="@provider.Id" class="d-inline">
+                                <button class="btn btn-outline-warning btn-sm">Rotate key</button>
+                            </form>
+                        }
                         <form method="post" asp-action="DeleteAcme" asp-route-id="@provider.Id" class="d-inline">
                             <button class="btn btn-outline-danger btn-sm">Delete</button>
                         </form>

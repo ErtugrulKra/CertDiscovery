@@ -12,6 +12,9 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
     public DbSet<CertificateSubjectAlternativeName> CertificateSubjectAlternativeNames => Set<CertificateSubjectAlternativeName>();
     public DbSet<VaultServer> VaultServers => Set<VaultServer>();
     public DbSet<AcmeProvider> AcmeProviders => Set<AcmeProvider>();
+    public DbSet<AcmeAccount> AcmeAccounts => Set<AcmeAccount>();
+    public DbSet<AcmeAccountEvent> AcmeAccountEvents => Set<AcmeAccountEvent>();
+    public DbSet<SecretRecord> SecretRecords => Set<SecretRecord>();
     public DbSet<DnsProvider> DnsProviders => Set<DnsProvider>();
     public DbSet<AcmeCertificateRequest> AcmeCertificateRequests => Set<AcmeCertificateRequest>();
     public DbSet<AssetCertificate> AssetCertificates => Set<AssetCertificate>();
@@ -25,9 +28,75 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
     public DbSet<DiscoveredEndpoint> DiscoveredEndpoints => Set<DiscoveredEndpoint>();
     public DbSet<VaultDiscoveryJob> VaultDiscoveryJobs => Set<VaultDiscoveryJob>();
     public DbSet<VaultDiscoveryResult> VaultDiscoveryResults => Set<VaultDiscoveryResult>();
+    public DbSet<DeploymentTarget> DeploymentTargets => Set<DeploymentTarget>();
+    public DbSet<DeploymentPolicy> DeploymentPolicies => Set<DeploymentPolicy>();
+    public DbSet<CertificateDeployment> CertificateDeployments => Set<CertificateDeployment>();
+    public DbSet<DeploymentJob> DeploymentJobs => Set<DeploymentJob>();
+    public DbSet<DeploymentAuditEvent> DeploymentAuditEvents => Set<DeploymentAuditEvent>();
+    public DbSet<DeploymentAgent> DeploymentAgents => Set<DeploymentAgent>();
+    public DbSet<DeploymentAgentRegistrationToken> DeploymentAgentRegistrationTokens => Set<DeploymentAgentRegistrationToken>();
+    public DbSet<DeploymentAgentRegistrationExchange> DeploymentAgentRegistrationExchanges => Set<DeploymentAgentRegistrationExchange>();
+    public DbSet<AgentDeploymentJob> AgentDeploymentJobs => Set<AgentDeploymentJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<DeploymentAgent>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.MachineName).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.AgentType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Version).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.OperatingSystem).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.CapabilitiesJson).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.AuthenticationTokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.PublicKeyPem).HasMaxLength(16384);
+            entity.HasIndex(x => x.MachineName);
+            entity.HasIndex(x => x.LastHeartbeatAtUtc);
+            entity.HasIndex(x => x.Status);
+        });
+        modelBuilder.Entity<DeploymentAgentRegistrationToken>(entity =>
+        {
+            entity.Property(x => x.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.CreatedBy).HasMaxLength(160);
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => x.ExpiresAtUtc);
+        });
+        modelBuilder.Entity<DeploymentAgentRegistrationExchange>(entity =>
+        {
+            entity.Property(x => x.ExchangeSecretHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.UserCode).HasMaxLength(16).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.MachineName).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.Version).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.OperatingSystem).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.CapabilitiesJson).IsRequired();
+            entity.Property(x => x.PublicKeyPem).HasMaxLength(16384).IsRequired();
+            entity.Property(x => x.PublicKeyFingerprint).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.ApprovedBy).HasMaxLength(160);
+            entity.Property(x => x.RejectedBy).HasMaxLength(160);
+            entity.HasIndex(x => x.ExchangeSecretHash).IsUnique();
+            entity.HasIndex(x => x.UserCode).IsUnique();
+            entity.HasIndex(x => new { x.Status, x.ExpiresAtUtc });
+            entity.HasOne(x => x.RegisteredAgent).WithMany().HasForeignKey(x => x.RegisteredAgentId).OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<AgentDeploymentJob>(entity =>
+        {
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.TargetConfigurationJson).IsRequired();
+            entity.Property(x => x.LeaseTokenHash).HasMaxLength(128);
+            entity.Property(x => x.Stage).HasMaxLength(80);
+            entity.Property(x => x.ObservedFingerprint).HasMaxLength(128);
+            entity.Property(x => x.PreviousFingerprint).HasMaxLength(128);
+            entity.Property(x => x.ErrorCode).HasMaxLength(120);
+            entity.Property(x => x.ErrorMessage).HasMaxLength(2048);
+            entity.HasIndex(x => new { x.DeploymentAgentId, x.Status, x.CreatedAtUtc });
+            entity.HasIndex(x => x.CertificateDeploymentId).IsUnique();
+            entity.HasOne(x => x.DeploymentAgent).WithMany().HasForeignKey(x => x.DeploymentAgentId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CertificateDeployment).WithMany().HasForeignKey(x => x.CertificateDeploymentId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<Asset>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
@@ -133,9 +202,47 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
             entity.Property(x => x.AccountEmail).HasMaxLength(255).IsRequired();
             entity.Property(x => x.ExternalAccountBindingKeyId).HasMaxLength(255);
             entity.Property(x => x.ExternalAccountBindingHmacKey).HasMaxLength(2048);
+            entity.Property(x => x.ExternalAccountBindingHmacSecretReference).HasMaxLength(512);
+            entity.Property(x => x.Organization).HasMaxLength(255);
+            entity.Property(x => x.Department).HasMaxLength(255);
+            entity.Property(x => x.CertificateProfile).HasMaxLength(255);
+            entity.Property(x => x.ProductType).HasMaxLength(120);
+            entity.Property(x => x.AllowedDomainPattern).HasMaxLength(512);
             entity.Property(x => x.Notes).HasMaxLength(1024);
             entity.HasIndex(x => x.Name).IsUnique();
             entity.HasIndex(x => x.IsEnabled);
+        });
+
+        modelBuilder.Entity<AcmeAccount>(entity =>
+        {
+            entity.Property(x => x.AccountLocation).HasMaxLength(1024).IsRequired();
+            entity.Property(x => x.AccountKeySecretReference).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.ExternalAccountBindingKeyId).HasMaxLength(255);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.ContactEmail).HasMaxLength(255).IsRequired();
+            entity.HasIndex(x => x.AcmeProviderId)
+                .IsUnique()
+                .HasFilter("\"Status\" = 'Active'");
+            entity.HasOne(x => x.AcmeProvider)
+                .WithMany(x => x.Accounts)
+                .HasForeignKey(x => x.AcmeProviderId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SecretRecord>(entity =>
+        {
+            entity.Property(x => x.Purpose).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.ProtectedValue).IsRequired();
+            entity.HasIndex(x => x.Purpose);
+        });
+
+        modelBuilder.Entity<AcmeAccountEvent>(entity =>
+        {
+            entity.Property(x => x.EventType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Message).HasMaxLength(1024);
+            entity.HasIndex(x => x.AcmeProviderId);
+            entity.HasIndex(x => x.AcmeAccountId);
+            entity.HasIndex(x => x.CreatedAtUtc);
         });
 
         modelBuilder.Entity<DnsProvider>(entity =>
@@ -144,6 +251,23 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
             entity.Property(x => x.ProviderType).HasConversion<string>().HasMaxLength(60);
             entity.Property(x => x.ZoneName).HasMaxLength(255).IsRequired();
             entity.Property(x => x.ApiToken).HasMaxLength(2048);
+            entity.Property(x => x.ApiTokenSecretReference).HasMaxLength(512);
+            entity.Property(x => x.HostedZoneId).HasMaxLength(255);
+            entity.Property(x => x.AwsAuthenticationMode).HasConversion<string>().HasMaxLength(60);
+            entity.Property(x => x.RoleArn).HasMaxLength(512);
+            entity.Property(x => x.AccessKeySecretReference).HasMaxLength(512);
+            entity.Property(x => x.SecretKeySecretReference).HasMaxLength(512);
+            entity.Property(x => x.SessionTokenSecretReference).HasMaxLength(512);
+            entity.Property(x => x.Region).HasMaxLength(80);
+            entity.Property(x => x.AzureAuthenticationMode).HasConversion<string>().HasMaxLength(60);
+            entity.Property(x => x.TenantId).HasMaxLength(255);
+            entity.Property(x => x.SubscriptionId).HasMaxLength(255);
+            entity.Property(x => x.ResourceGroup).HasMaxLength(255);
+            entity.Property(x => x.ClientId).HasMaxLength(255);
+            entity.Property(x => x.ClientSecretReference).HasMaxLength(512);
+            entity.Property(x => x.ManagedIdentityClientId).HasMaxLength(255);
+            entity.Property(x => x.LastHealthCheckStatus).HasMaxLength(80);
+            entity.Property(x => x.LastHealthCheckError).HasMaxLength(2048);
             entity.Property(x => x.Notes).HasMaxLength(1024);
             entity.HasIndex(x => x.Name).IsUnique();
             entity.HasIndex(x => x.IsEnabled);
@@ -169,9 +293,77 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
             entity.HasIndex(x => x.Domain);
             entity.HasIndex(x => x.NextScheduleCheckAtUtc);
             entity.HasOne(x => x.AcmeProvider).WithMany().HasForeignKey(x => x.AcmeProviderId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.AcmeAccount).WithMany().HasForeignKey(x => x.AcmeAccountId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(x => x.VaultServer).WithMany().HasForeignKey(x => x.VaultServerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(x => x.DnsProvider).WithMany().HasForeignKey(x => x.DnsProviderId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(x => x.Certificate).WithMany().HasForeignKey(x => x.CertificateId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<DeploymentTarget>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.TargetType).HasConversion<string>().HasMaxLength(60);
+            entity.Property(x => x.ConfigurationJson).IsRequired();
+            entity.Property(x => x.SecretReference).HasMaxLength(512);
+            entity.HasIndex(x => x.Name).IsUnique();
+            entity.HasIndex(x => x.IsEnabled);
+            entity.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.DeploymentAgent).WithMany(x => x.DeploymentTargets)
+                .HasForeignKey(x => x.DeploymentAgentId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<DeploymentPolicy>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.DeploymentWindow).HasMaxLength(160);
+            entity.HasIndex(x => x.Name).IsUnique();
+            entity.HasIndex(x => x.IsEnabled);
+        });
+
+        modelBuilder.Entity<CertificateDeployment>(entity =>
+        {
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(60);
+            entity.Property(x => x.Origin).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.PreviousFingerprint).HasMaxLength(128);
+            entity.Property(x => x.ExpectedFingerprint).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ObservedFingerprint).HasMaxLength(128);
+            entity.Property(x => x.ErrorCode).HasMaxLength(120);
+            entity.Property(x => x.ErrorMessage).HasMaxLength(2048);
+            entity.Property(x => x.BackupReference).HasMaxLength(1024);
+            entity.Property(x => x.RollbackStatus).HasMaxLength(512);
+            entity.Property(x => x.VerificationStatus).HasMaxLength(512);
+            entity.Property(x => x.RequestedBy).HasMaxLength(160);
+            entity.Property(x => x.ApprovedBy).HasMaxLength(160);
+            entity.HasIndex(x => x.IdempotencyKey).IsUnique();
+            entity.HasIndex(x => new { x.DeploymentTargetId, x.CertificateId });
+            entity.HasIndex(x => new { x.Status, x.CreatedAtUtc });
+            entity.HasOne(x => x.CertificateRequest).WithMany().HasForeignKey(x => x.CertificateRequestId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Certificate).WithMany().HasForeignKey(x => x.CertificateId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.DeploymentTarget).WithMany().HasForeignKey(x => x.DeploymentTargetId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.DeploymentPolicy).WithMany().HasForeignKey(x => x.DeploymentPolicyId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DeploymentJob>(entity =>
+        {
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.ClaimOwner).HasMaxLength(160);
+            entity.Property(x => x.LastError).HasMaxLength(2048);
+            entity.HasIndex(x => x.IdempotencyKey).IsUnique();
+            entity.HasIndex(x => new { x.Status, x.NextAttemptAtUtc, x.LeaseExpiresAtUtc });
+            entity.HasOne(x => x.CertificateDeployment).WithMany().HasForeignKey(x => x.CertificateDeploymentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DeploymentAuditEvent>(entity =>
+        {
+            entity.Property(x => x.EventType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Actor).HasMaxLength(160);
+            entity.Property(x => x.Message).HasMaxLength(2048);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(60);
+            entity.Property(x => x.CertificateFingerprint).HasMaxLength(128);
+            entity.HasIndex(x => new { x.CertificateDeploymentId, x.CreatedAtUtc });
+            entity.HasOne(x => x.CertificateDeployment).WithMany().HasForeignKey(x => x.CertificateDeploymentId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<AppUser>(entity =>

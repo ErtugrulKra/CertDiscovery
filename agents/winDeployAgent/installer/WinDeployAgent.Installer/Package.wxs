@@ -1,0 +1,57 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="CertDiscovery Microsoft IIS Deployment Agent"
+      Manufacturer="CertDiscovery"
+      Version="$(var.ProductVersion)"
+      UpgradeCode="B9687A6C-78C9-4DD5-B1D4-952117CE8A11"
+      Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of winDeployAgent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="CENTRALURL"
+              Value="http://localhost:8080"
+              Secure="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="CertDiscovery">
+        <Directory Id="AGENTFOLDER" Name="winDeployAgent">
+          <Component Id="AgentServiceComponent" Guid="*">
+            <File Id="AgentExecutable"
+                  Source="$(AgentPublishDir)\winDeployAgent.exe"
+                  KeyPath="yes" />
+            <File Id="AgentSettings"
+                  Source="$(AgentPublishDir)\appsettings.json" />
+            <ServiceInstall
+                Id="AgentServiceInstall"
+                Name="CertDiscoveryWinDeployAgent"
+                DisplayName="CertDiscovery Microsoft IIS Deployment Agent"
+                Description="Deploys Vault-backed certificates to local Microsoft IIS bindings."
+                Type="ownProcess"
+                Start="auto"
+                ErrorControl="normal"
+                Account="LocalSystem" />
+            <ServiceControl
+                Id="AgentServiceControl"
+                Name="CertDiscoveryWinDeployAgent"
+                Start="install"
+                Stop="both"
+                Remove="uninstall"
+                Wait="yes" />
+            <Environment
+                Id="AgentCentralUrlEnvironment"
+                Name="Agent__CentralUrl"
+                Value="[CENTRALURL]"
+                Action="set"
+                Part="all"
+                System="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Complete" Title="winDeployAgent" Level="1">
+      <ComponentRef Id="AgentServiceComponent" />
+    </Feature>
+  </Package>
+</Wix>

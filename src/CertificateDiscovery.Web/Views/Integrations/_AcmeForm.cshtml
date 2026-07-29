@@ -33,6 +33,26 @@
             <textarea class="form-control" asp-for="Notes" rows="2"></textarea>
         </div>
         <div class="col-md-6">
+            <label class="form-label" asp-for="Organization">Organization</label>
+            <input class="form-control" asp-for="Organization" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Department">Department</label>
+            <input class="form-control" asp-for="Department" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" asp-for="CertificateProfile">Certificate profile</label>
+            <input class="form-control" asp-for="CertificateProfile" placeholder="DV" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" asp-for="ProductType">Product type</label>
+            <input class="form-control" asp-for="ProductType" placeholder="SSL" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" asp-for="AllowedDomainPattern">Allowed domain pattern</label>
+            <input class="form-control" asp-for="AllowedDomainPattern" placeholder="*.example.com" />
+        </div>
+        <div class="col-md-6">
             <div class="form-check form-switch">
                 <input class="form-check-input" asp-for="IsStaging" />
                 <label class="form-check-label" asp-for="IsStaging">Staging</label>

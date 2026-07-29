@@ -1,22 +1,35 @@
 namespace CertificateDiscovery.Infrastructure.Services;
 
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Net.Http.Json;
-using System.Reflection;
-using System.Text.Json;
-using Certes;
-using Certes.Acme;
+using CertificateDiscovery.Application.Acme;
+using CertificateDiscovery.Application.Dns;
+using CertificateDiscovery.Application.Inventory;
+using CertificateDiscovery.Application.Requests;
+using CertificateDiscovery.Application.Storage;
 using CertificateDiscovery.Contracts;
 using CertificateDiscovery.Domain;
 using CertificateDiscovery.Domain.Entities;
 using CertificateDiscovery.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
-public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, IHttpClientFactory httpClientFactory)
+public sealed class CertificateRequestService(
+    CertificateDiscoveryDbContext db,
+    IAcmeCertificateClient acmeClient,
+    IAcmeAccountService acmeAccountService,
+    IDnsChallengeProviderResolver dnsProviderResolver,
+    ICertificateStore certificateStore,
+    ICertificateInventoryWriter inventoryWriter,
+    ICertificateRequestStateMachine stateMachine)
 {
     private static readonly TimeSpan AutomaticDnsPropagationDelay = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan AutomaticRenewalRetryDelay = TimeSpan.FromMinutes(15);
+
+    private static string CertificateFingerprint(string certificatePem)
+    {
+        using var certificate = X509Certificate2.CreateFromPem(certificatePem);
+        return Convert.ToHexString(SHA256.HashData(certificate.RawData));
+    }
 
     public async Task<List<CertificateRequestListDto>> ListAsync(CancellationToken cancellationToken) =>
         await db.AcmeCertificateRequests
@@ -142,27 +155,15 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
             throw new InvalidOperationException("Only draft or failed requests can start a new ACME challenge.");
         }
 
-        var accountKey = KeyFactory.NewKey(KeyAlgorithm.ES256);
-        var acme = new AcmeContext(request.AcmeProvider!.DirectoryUrl, accountKey);
-        await acme.NewAccount([ToAcmeContact(request.AcmeProvider.AccountEmail)], true);
-
         var domains = GetDomains(request).ToList();
-        var order = await acme.NewOrder(domains);
-        var authorizations = (await order.Authorizations()).ToList();
-        var instructions = new List<(string Name, string Value)>();
-        foreach (var authorization in authorizations)
-        {
-            var resource = await GetResourceAsync(authorization);
-            var identifier = NormalizeDomain(GetIdentifierValue(resource));
-            var challenge = await authorization.Dns();
-            instructions.Add((ToDnsTxtName(identifier), acme.AccountKey.DnsTxt(challenge.Token)));
-        }
-
-        request.AcmeAccountKeyPem = accountKey.ToPem();
-        request.AcmeOrderLocation = GetLocation(order)?.ToString();
-        request.DnsTxtName = string.Join('\n', instructions.Select(x => x.Name));
-        request.DnsTxtValue = string.Join('\n', instructions.Select(x => x.Value));
-        request.Status = CertificateRequestStatus.PendingDns;
+        var account = await acmeAccountService.GetOrCreateAsync(request.AcmeProvider!, cancellationToken);
+        var order = await acmeClient.CreateOrderAsync(request.AcmeProvider!, account, domains, cancellationToken);
+        request.AcmeAccountId = account.AccountId;
+        request.AcmeAccountKeyPem = null;
+        request.AcmeOrderLocation = order.OrderLocation;
+        request.DnsTxtName = string.Join('\n', order.Challenges.Select(x => x.RecordName));
+        request.DnsTxtValue = string.Join('\n', order.Challenges.Select(x => x.RecordValue));
+        stateMachine.Transition(request, CertificateRequestStatus.PendingDns);
         request.ErrorMessage = null;
         request.ChallengeCreatedAtUtc = DateTime.UtcNow;
         request.UpdatedAtUtc = DateTime.UtcNow;
@@ -177,63 +178,54 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
             throw new InvalidOperationException("Only pending DNS requests can be validated.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.AcmeAccountKeyPem) || string.IsNullOrWhiteSpace(request.AcmeOrderLocation))
+        if ((request.AcmeAccountId is null && string.IsNullOrWhiteSpace(request.AcmeAccountKeyPem)) || string.IsNullOrWhiteSpace(request.AcmeOrderLocation))
         {
             throw new InvalidOperationException("ACME challenge has not been started yet.");
         }
 
         try
         {
-            request.Status = CertificateRequestStatus.Validating;
+            if (request.DnsProvider is not null && request.DnsPublishedAtUtc is not null)
+            {
+                var records = GetDnsChallengeRecords(request)
+                    .Select(x => new DnsTxtChallenge(x.Name, x.Value))
+                    .ToList();
+                var dnsProvider = dnsProviderResolver.Resolve(request.DnsProvider.ProviderType);
+                var propagation = await dnsProvider.WaitForPropagationAsync(request.DnsProvider, records, cancellationToken);
+                if (!propagation.IsPropagated)
+                    throw new TimeoutException(propagation.Message ?? "DNS TXT challenge values did not propagate before the configured timeout.");
+            }
+
+            stateMachine.Transition(request, CertificateRequestStatus.Validating);
             request.ErrorMessage = null;
             request.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
 
-            var accountKey = KeyFactory.FromPem(request.AcmeAccountKeyPem);
-            var acme = new AcmeContext(request.AcmeProvider!.DirectoryUrl, accountKey);
-            var order = acme.Order(new Uri(request.AcmeOrderLocation));
-            var authorizations = (await order.Authorizations()).ToList();
-            foreach (var authorization in authorizations)
-            {
-                var resource = await GetResourceAsync(authorization);
-                if (GetStatus(resource) == "Valid") continue;
-                var challenge = await authorization.Dns();
-                await challenge.Validate();
-            }
-
-            await WaitUntilOrderReadyAsync(order, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(15), cancellationToken);
-
-            var certificateKey = KeyFactory.NewKey(KeyAlgorithm.ES256);
-            var chain = await order.Generate(new CsrInfo
-            {
-                CommonName = request.Domain,
-                Organization = "Certificate Discovery Platform"
-            }, certificateKey, retryCount: 10);
-
-            var certificatePem = chain.Certificate.ToPem();
-            var issuerPem = string.Join('\n', chain.Issuers.Select(x => x.ToPem()));
-            var fullChainPem = certificatePem + issuerPem;
-            var privateKeyPem = certificateKey.ToPem();
-
-            request.CertificatePrivateKeyPem = privateKeyPem;
-            request.CertificatePem = certificatePem;
-            request.FullChainPem = fullChainPem;
-            request.Status = CertificateRequestStatus.Issued;
+            var account = request.AcmeAccountId is not null
+                ? await acmeAccountService.GetCredentialsAsync(request.AcmeAccountId.Value, cancellationToken)
+                : new AcmeAccountCredentials(Guid.Empty, string.Empty, request.AcmeAccountKeyPem!);
+            var order = new AcmeOrderContext(account.AccountKeyPem, request.AcmeOrderLocation, []);
+            var bundle = await acmeClient.ValidateAndFinalizeAsync(request.AcmeProvider!, account, order, request.Domain, cancellationToken);
+            stateMachine.Transition(request, CertificateRequestStatus.Issued);
             request.IssuedAtUtc = DateTime.UtcNow;
             request.UpdatedAtUtc = DateTime.UtcNow;
 
-            var certificate = await UpsertCertificateAsync(request, certificatePem, fullChainPem, cancellationToken);
-            request.CertificateId = certificate.Id;
-            await StoreInVaultAsync(request, cancellationToken);
-            request.Status = CertificateRequestStatus.StoredInVault;
-            request.StoredAtUtc = DateTime.UtcNow;
+            var domains = GetDomains(request);
+            var stored = await certificateStore.StoreAsync(
+                new CertificateStoreContext(request, request.VaultServer!, request.AcmeProvider, domains, bundle.CertificatePem, bundle.PrivateKeyPem, bundle.FullChainPem, CertificateFingerprint(bundle.CertificatePem)),
+                cancellationToken);
+            request.CertificateId = await inventoryWriter.UpsertAsync(
+                new CertificateInventoryContext(request, request.AcmeProvider, domains, bundle.CertificatePem, bundle.FullChainPem),
+                cancellationToken);
+            stateMachine.Transition(request, CertificateRequestStatus.StoredInVault);
+            request.StoredAtUtc = stored.StoredAtUtc;
             request.UpdatedAtUtc = DateTime.UtcNow;
             await CleanupDnsChallengeAfterIssueAsync(request, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
         }
         catch (TimeoutException ex)
         {
-            request.Status = CertificateRequestStatus.ReadyToValidate;
+            stateMachine.Transition(request, CertificateRequestStatus.ReadyToValidate);
             request.ErrorMessage = ex.Message;
             request.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
@@ -241,7 +233,7 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
         }
         catch (Exception ex)
         {
-            request.Status = CertificateRequestStatus.Failed;
+            stateMachine.Transition(request, CertificateRequestStatus.Failed);
             request.ErrorMessage = ex.Message;
             request.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
@@ -260,14 +252,13 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
             var records = GetDnsChallengeRecords(request).ToList();
             if (records.Count == 0) throw new InvalidOperationException("No DNS TXT records are available to publish.");
 
-            if (request.DnsProvider.ProviderType != DnsProviderType.Cloudflare)
-            {
-                throw new InvalidOperationException($"DNS provider type {request.DnsProvider.ProviderType} is not supported yet.");
-            }
-
-            await PublishCloudflareRecordsAsync(request.DnsProvider, records, cancellationToken);
+            var provider = dnsProviderResolver.Resolve(request.DnsProvider.ProviderType);
+            var result = await provider.PublishAsync(
+                request.DnsProvider,
+                records.Select(x => new DnsTxtChallenge(x.Name, x.Value)).ToList(),
+                cancellationToken);
             request.DnsPublishedAtUtc = DateTime.UtcNow;
-            request.DnsPublishStatus = $"Published {records.Count} TXT record(s)";
+            request.DnsPublishStatus = result.Message;
             request.DnsPublishError = null;
             request.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
@@ -294,32 +285,6 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
         }
     }
 
-    private async Task PublishCloudflareRecordsAsync(DnsProvider provider, IReadOnlyList<(string Name, string Value)> records, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(provider.ApiToken)) throw new InvalidOperationException("Cloudflare API token is required.");
-        var client = httpClientFactory.CreateClient();
-        client.BaseAddress = new Uri("https://api.cloudflare.com/client/v4/");
-        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", provider.ApiToken);
-
-        var zoneId = await GetCloudflareZoneIdAsync(client, provider.ZoneName, cancellationToken);
-        foreach (var record in records)
-        {
-            var existingId = await GetCloudflareTxtRecordIdAsync(client, zoneId, record.Name, record.Value, cancellationToken);
-            var payload = new
-            {
-                type = "TXT",
-                name = record.Name,
-                content = record.Value,
-                ttl = 120
-            };
-
-            using var response = existingId is null
-                ? await client.PostAsJsonAsync($"zones/{zoneId}/dns_records", payload, cancellationToken)
-                : await client.PutAsJsonAsync($"zones/{zoneId}/dns_records/{existingId}", payload, cancellationToken);
-            await EnsureCloudflareSuccessAsync(response, cancellationToken);
-        }
-    }
-
     private async Task CleanupDnsChallengeAfterIssueAsync(AcmeCertificateRequest request, CancellationToken cancellationToken)
     {
         if (request.DnsProvider is null || string.IsNullOrWhiteSpace(request.DnsTxtName) || string.IsNullOrWhiteSpace(request.DnsTxtValue))
@@ -338,13 +303,11 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
                 request.DnsPublishError = "DNS cleanup skipped: no DNS TXT challenge records are stored on this request.";
                 return;
             }
-            if (request.DnsProvider.ProviderType != DnsProviderType.Cloudflare)
-            {
-                request.DnsPublishError = $"DNS cleanup is not supported for provider type {request.DnsProvider.ProviderType}.";
-                return;
-            }
-
-            var deleted = await DeleteCloudflareRecordsAsync(request.DnsProvider, records, cancellationToken);
+            var provider = dnsProviderResolver.Resolve(request.DnsProvider.ProviderType);
+            var deleted = await provider.CleanupAsync(
+                request.DnsProvider,
+                records.Select(x => new DnsTxtChallenge(x.Name, x.Value)).ToList(),
+                cancellationToken);
             var prefix = string.IsNullOrWhiteSpace(request.DnsPublishStatus) ? "DNS challenge" : request.DnsPublishStatus;
             request.DnsPublishStatus = $"{prefix}; cleaned {deleted} TXT record(s)";
             request.DnsPublishError = deleted == 0 ? "DNS cleanup found no matching TXT records at the provider." : null;
@@ -361,87 +324,6 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
         await CleanupDnsChallengeAfterIssueAsync(request, cancellationToken);
         request.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task<int> DeleteCloudflareRecordsAsync(DnsProvider provider, IReadOnlyList<(string Name, string Value)> records, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(provider.ApiToken)) throw new InvalidOperationException("Cloudflare API token is required.");
-        var client = httpClientFactory.CreateClient();
-        client.BaseAddress = new Uri("https://api.cloudflare.com/client/v4/");
-        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", provider.ApiToken);
-
-        var deleted = 0;
-        var zoneId = await GetCloudflareZoneIdAsync(client, provider.ZoneName, cancellationToken);
-        foreach (var record in records)
-        {
-            var existingIds = await GetCloudflareTxtRecordIdsAsync(client, zoneId, record.Name, record.Value, cancellationToken);
-            foreach (var existingId in existingIds)
-            {
-                using var response = await client.DeleteAsync($"zones/{zoneId}/dns_records/{existingId}", cancellationToken);
-                await EnsureCloudflareSuccessAsync(response, cancellationToken);
-                deleted++;
-            }
-        }
-
-        return deleted;
-    }
-
-    private static async Task<string> GetCloudflareZoneIdAsync(HttpClient client, string zoneName, CancellationToken cancellationToken)
-    {
-        using var response = await client.GetAsync($"zones?name={Uri.EscapeDataString(zoneName)}&status=active", cancellationToken);
-        using var document = await ReadCloudflareResponseAsync(response, cancellationToken);
-        var result = document.RootElement.GetProperty("result");
-        if (result.GetArrayLength() == 0) throw new InvalidOperationException($"Cloudflare zone '{zoneName}' was not found or is not active.");
-        return result[0].GetProperty("id").GetString()!;
-    }
-
-    private static async Task<string?> GetCloudflareTxtRecordIdAsync(HttpClient client, string zoneId, string name, string value, CancellationToken cancellationToken)
-    {
-        var ids = await GetCloudflareTxtRecordIdsAsync(client, zoneId, name, value, cancellationToken);
-        return ids.FirstOrDefault();
-    }
-
-    private static async Task<List<string>> GetCloudflareTxtRecordIdsAsync(HttpClient client, string zoneId, string name, string value, CancellationToken cancellationToken)
-    {
-        using var response = await client.GetAsync($"zones/{zoneId}/dns_records?type=TXT&name={Uri.EscapeDataString(name)}", cancellationToken);
-        using var document = await ReadCloudflareResponseAsync(response, cancellationToken);
-        var ids = new List<string>();
-        foreach (var item in document.RootElement.GetProperty("result").EnumerateArray())
-        {
-            if (string.Equals(item.GetProperty("content").GetString(), value, StringComparison.Ordinal))
-            {
-                var id = item.GetProperty("id").GetString();
-                if (!string.IsNullOrWhiteSpace(id)) ids.Add(id);
-            }
-        }
-
-        return ids;
-    }
-
-    private static async Task<JsonDocument> ReadCloudflareResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        var document = JsonDocument.Parse(content);
-        if (!response.IsSuccessStatusCode || !document.RootElement.TryGetProperty("success", out var success) || !success.GetBoolean())
-        {
-            var message = TryGetCloudflareError(document) ?? response.ReasonPhrase ?? "Cloudflare API request failed.";
-            document.Dispose();
-            throw new InvalidOperationException(message);
-        }
-
-        return document;
-    }
-
-    private static async Task EnsureCloudflareSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        using var document = await ReadCloudflareResponseAsync(response, cancellationToken);
-    }
-
-    private static string? TryGetCloudflareError(JsonDocument document)
-    {
-        if (!document.RootElement.TryGetProperty("errors", out var errors) || errors.ValueKind != JsonValueKind.Array || errors.GetArrayLength() == 0) return null;
-        var first = errors[0];
-        return first.TryGetProperty("message", out var message) ? message.GetString() : first.ToString();
     }
 
     private static bool IsAcmeDnsValidationFailure(Exception ex)
@@ -570,10 +452,8 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
         }
 
         request = await LoadMutableAsync(id, cancellationToken);
-        UpdateScheduleResult(request, checkedAtUtc, DateTime.UtcNow.Add(AutomaticDnsPropagationDelay), "WaitingForDnsPropagation", $"TXT records were published and ACME validation will start after {AutomaticDnsPropagationDelay.TotalMinutes:0} minute(s).");
+        UpdateScheduleResult(request, checkedAtUtc, nextCheck, "WaitingForDnsPropagation", "TXT records were published; authoritative DNS propagation verification is in progress.");
         await db.SaveChangesAsync(cancellationToken);
-
-        await Task.Delay(AutomaticDnsPropagationDelay, cancellationToken);
         try
         {
             await ValidateIssueAndStoreAsync(id, cancellationToken);
@@ -623,16 +503,13 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
         request.UpdatedAtUtc = DateTime.UtcNow;
     }
 
-    private static void PrepareForScheduledRenewal(AcmeCertificateRequest request)
+    private void PrepareForScheduledRenewal(AcmeCertificateRequest request)
     {
-        request.Status = CertificateRequestStatus.Draft;
+        stateMachine.Transition(request, CertificateRequestStatus.Draft);
         request.DnsTxtName = null;
         request.DnsTxtValue = null;
         request.AcmeAccountKeyPem = null;
         request.AcmeOrderLocation = null;
-        request.CertificatePrivateKeyPem = null;
-        request.CertificatePem = null;
-        request.FullChainPem = null;
         request.ErrorMessage = null;
         request.DnsPublishedAtUtc = null;
         request.DnsPublishStatus = null;
@@ -643,103 +520,6 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
         request.RenewedFromRequestId = null;
         request.LastRenewalRequestId = null;
         request.UpdatedAtUtc = DateTime.UtcNow;
-    }
-
-    private async Task StoreInVaultAsync(AcmeCertificateRequest request, CancellationToken cancellationToken)
-    {
-        if (request.VaultServer is null) throw new InvalidOperationException("Vault server was not loaded.");
-        if (string.IsNullOrWhiteSpace(request.VaultServer.Token)) throw new InvalidOperationException("Vault token is required to store certificates.");
-        if (string.IsNullOrWhiteSpace(request.CertificatePem) || string.IsNullOrWhiteSpace(request.FullChainPem) || string.IsNullOrWhiteSpace(request.CertificatePrivateKeyPem))
-        {
-            throw new InvalidOperationException("Issued certificate material is incomplete.");
-        }
-
-        var (mount, path) = SplitVaultKvPath(request.VaultSecretPath);
-        var client = httpClientFactory.CreateClient();
-        client.BaseAddress = request.VaultServer.BaseUrl;
-        client.DefaultRequestHeaders.Add("X-Vault-Token", request.VaultServer.Token);
-
-        var payload = new
-        {
-            data = new
-            {
-                domain = request.Domain,
-                sans = GetDomains(request),
-                certificate_pem = request.CertificatePem,
-                private_key_pem = request.CertificatePrivateKeyPem,
-                fullchain_pem = request.FullChainPem,
-                acme_provider = request.AcmeProvider?.Name,
-                issued_at_utc = request.IssuedAtUtc,
-                certificate_request_id = request.Id
-            }
-        };
-
-        using var response = await client.PostAsJsonAsync($"/v1/{mount}/data/{path}", payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
-    }
-
-    private async Task<Certificate> UpsertCertificateAsync(AcmeCertificateRequest request, string certificatePem, string fullChainPem, CancellationToken cancellationToken)
-    {
-        var leaf = X509Certificate2.CreateFromPem(certificatePem);
-        var chain = ParsePemCertificates(fullChainPem);
-        if (chain.Count == 0) chain.Add(leaf);
-        var fingerprint = Fingerprint(leaf);
-        var certificate = await db.Certificates.FirstOrDefaultAsync(x => x.FingerprintSha256 == fingerprint, cancellationToken);
-        if (certificate is null)
-        {
-            certificate = new Certificate { FingerprintSha256 = fingerprint };
-            db.Certificates.Add(certificate);
-        }
-
-        certificate.SerialNumber = leaf.SerialNumber;
-        certificate.Subject = leaf.Subject;
-        certificate.CommonName = leaf.GetNameInfo(X509NameType.SimpleName, false);
-        certificate.Issuer = leaf.Issuer;
-        certificate.NotBeforeUtc = leaf.NotBefore.ToUniversalTime();
-        certificate.NotAfterUtc = leaf.NotAfter.ToUniversalTime();
-        certificate.SignatureAlgorithm = leaf.SignatureAlgorithm.FriendlyName;
-        certificate.PublicKeyAlgorithm = leaf.PublicKey.Oid.FriendlyName;
-        certificate.PublicKeySize = GetPublicKeySize(leaf);
-        certificate.Version = leaf.Version;
-        certificate.IsSelfSigned = leaf.Subject == leaf.Issuer;
-        certificate.Source = CertificateSource.Acme;
-        certificate.SourceName = request.AcmeProvider?.Name;
-        certificate.ExternalReference = request.VaultSecretPath;
-        certificate.PemEncodedCertificate = certificatePem;
-        certificate.LastSeenAtUtc = DateTime.UtcNow;
-
-        await db.CertificateSubjectAlternativeNames.Where(x => x.CertificateId == certificate.Id).ExecuteDeleteAsync(cancellationToken);
-        foreach (var name in GetDomains(request).Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            db.CertificateSubjectAlternativeNames.Add(new CertificateSubjectAlternativeName { CertificateId = certificate.Id, Name = name, Type = CertificateSanType.DNS });
-        }
-
-        await db.CertificateChainEntries.Where(x => x.CertificateId == certificate.Id).ExecuteDeleteAsync(cancellationToken);
-        foreach (var entry in chain.Select((cert, index) => new { cert, index }))
-        {
-            db.CertificateChainEntries.Add(new CertificateChainEntry
-            {
-                CertificateId = certificate.Id,
-                Position = entry.index,
-                FingerprintSha256 = Fingerprint(entry.cert),
-                SerialNumber = entry.cert.SerialNumber,
-                Subject = entry.cert.Subject,
-                CommonName = entry.cert.GetNameInfo(X509NameType.SimpleName, false),
-                Issuer = entry.cert.Issuer,
-                NotBeforeUtc = entry.cert.NotBefore.ToUniversalTime(),
-                NotAfterUtc = entry.cert.NotAfter.ToUniversalTime(),
-                SignatureAlgorithm = entry.cert.SignatureAlgorithm.FriendlyName,
-                PublicKeyAlgorithm = entry.cert.PublicKey.Oid.FriendlyName,
-                PublicKeySize = GetPublicKeySize(entry.cert),
-                Version = entry.cert.Version,
-                IsSelfSigned = entry.cert.Subject == entry.cert.Issuer,
-                PemEncodedCertificate = PemEncode(entry.cert),
-                LastSeenAtUtc = DateTime.UtcNow
-            });
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-        return certificate;
     }
 
     private static IReadOnlyList<string> GetDomains(AcmeCertificateRequest request)
@@ -762,93 +542,6 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
             .ToList();
     }
 
-    private static List<X509Certificate2> ParsePemCertificates(string pem)
-    {
-        var certificates = new List<X509Certificate2>();
-        const string begin = "-----BEGIN CERTIFICATE-----";
-        const string end = "-----END CERTIFICATE-----";
-        var index = 0;
-        while (true)
-        {
-            var start = pem.IndexOf(begin, index, StringComparison.Ordinal);
-            if (start < 0) break;
-            var finish = pem.IndexOf(end, start, StringComparison.Ordinal);
-            if (finish < 0) break;
-            finish += end.Length;
-            certificates.Add(X509Certificate2.CreateFromPem(pem.Substring(start, finish - start)));
-            index = finish;
-        }
-
-        return certificates;
-    }
-
-    private static Uri? GetLocation(object order)
-    {
-        var property = order.GetType().GetProperty("Location");
-        return property?.GetValue(order) as Uri;
-    }
-
-    private static async Task WaitUntilOrderReadyAsync(IOrderContext order, TimeSpan maxWait, TimeSpan interval, CancellationToken cancellationToken)
-    {
-        var deadline = DateTime.UtcNow.Add(maxWait);
-        while (DateTime.UtcNow <= deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var orderResource = await GetResourceAsync(order);
-            var orderStatus = GetStatus(orderResource);
-            if (orderStatus is "Ready" or "Valid") return;
-            if (orderStatus == "Invalid")
-            {
-                throw new InvalidOperationException("ACME order became invalid.");
-            }
-
-            var authorizations = (await order.Authorizations()).ToList();
-            var authorizationResources = new List<object>();
-            foreach (var authorization in authorizations)
-            {
-                authorizationResources.Add(await GetResourceAsync(authorization));
-            }
-
-            if (authorizationResources.Any(x => GetStatus(x) is "Invalid" or "Expired" or "Deactivated" or "Revoked"))
-            {
-                var failed = authorizationResources.First(x => GetStatus(x) is "Invalid" or "Expired" or "Deactivated" or "Revoked");
-                throw new InvalidOperationException($"ACME authorization failed for {GetIdentifierValue(failed)} with status {GetStatus(failed)}.");
-            }
-
-            await Task.Delay(interval, cancellationToken);
-        }
-
-        throw new TimeoutException("ACME validation is still pending. DNS propagation may not be complete yet; keep the TXT record in place and try validation again in a few minutes.");
-    }
-
-    private static async Task<object> GetResourceAsync(object context)
-    {
-        var method = context.GetType().GetMethod("Resource", BindingFlags.Public | BindingFlags.Instance)
-            ?? throw new InvalidOperationException("ACME resource status cannot be read.");
-        var task = (Task)method.Invoke(context, null)!;
-        await task.ConfigureAwait(false);
-        return task.GetType().GetProperty("Result")!.GetValue(task)!;
-    }
-
-    private static string? GetStatus(object resource) =>
-        resource.GetType().GetProperty("Status")?.GetValue(resource)?.ToString();
-
-    private static string GetIdentifierValue(object authorizationResource)
-    {
-        var identifier = authorizationResource.GetType().GetProperty("Identifier")?.GetValue(authorizationResource);
-        return identifier?.GetType().GetProperty("Value")?.GetValue(identifier)?.ToString()
-            ?? throw new InvalidOperationException("ACME authorization identifier cannot be read.");
-    }
-
-    private static (string Mount, string Path) SplitVaultKvPath(string value)
-    {
-        var normalized = value.Trim().Trim('/');
-        var parts = normalized.Split('/', 2, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2) throw new InvalidOperationException("Vault secret path must be in '<mount>/<path>' format, for example secret/certificates/example.com.");
-        var path = parts[1].StartsWith("data/", StringComparison.OrdinalIgnoreCase) ? parts[1].Substring(5) : parts[1];
-        return (parts[0], path);
-    }
-
     private static void ValidateCreate(CertificateRequestCreateRequest input)
     {
         if (string.IsNullOrWhiteSpace(input.Domain)) throw new ArgumentException("Domain is required.");
@@ -867,12 +560,8 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
 
     private async Task EnsureRequestDependenciesAsync(CertificateRequestCreateRequest input, CancellationToken cancellationToken)
     {
-        var provider = await db.AcmeProviders.FirstOrDefaultAsync(x => x.Id == input.AcmeProviderId && x.IsEnabled, cancellationToken)
+        _ = await db.AcmeProviders.FirstOrDefaultAsync(x => x.Id == input.AcmeProviderId && x.IsEnabled, cancellationToken)
             ?? throw new InvalidOperationException("Enabled ACME provider was not found.");
-        if (!string.IsNullOrWhiteSpace(provider.ExternalAccountBindingKeyId) || !string.IsNullOrWhiteSpace(provider.ExternalAccountBindingHmacKey))
-        {
-            throw new InvalidOperationException("External Account Binding ACME providers are registered but issuance support for EAB is not implemented yet.");
-        }
 
         _ = await db.VaultServers.FirstOrDefaultAsync(x => x.Id == input.VaultServerId && x.IsEnabled, cancellationToken)
             ?? throw new InvalidOperationException("Enabled Vault server was not found.");
@@ -922,15 +611,11 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
     private static string NormalizeVaultPath(string? value, string domain) => string.IsNullOrWhiteSpace(value) ? $"secret/certificates/{domain}" : value.Trim().Trim('/');
     private static string ToDnsTxtName(string domain) => $"_acme-challenge.{domain.TrimStart('*').TrimStart('.')}";
     private static string ToAcmeContact(string email) => email.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ? email.Trim() : $"mailto:{email.Trim()}";
-    private static string Fingerprint(X509Certificate2 certificate) => Convert.ToHexString(SHA256.HashData(certificate.RawData));
-    private static string PemEncode(X509Certificate2 certificate) => "-----BEGIN CERTIFICATE-----\n" + Convert.ToBase64String(certificate.RawData, Base64FormattingOptions.InsertLineBreaks) + "\n-----END CERTIFICATE-----\n";
-    private static int? GetPublicKeySize(X509Certificate2 certificate) => certificate.GetRSAPublicKey()?.KeySize ?? certificate.GetECDsaPublicKey()?.KeySize ?? certificate.GetDSAPublicKey()?.KeySize;
-
     private static CertificateRequestListDto ToListDto(AcmeCertificateRequest request) =>
-        new(request.Id, request.Domain, request.SubjectAlternativeNames, request.Status, request.AcmeProvider?.Name ?? "-", request.VaultServer?.Name ?? "-", request.VaultSecretPath, request.DnsProvider?.Name, request.CreatedAtUtc, request.IssuedAtUtc, request.StoredAtUtc, request.ScheduleCheck, request.RenewalThresholdDays, request.RenewalCronExpression, request.NextScheduleCheckAtUtc, request.LastScheduleCheckAtUtc, request.LastScheduleCheckStatus, request.LastScheduleCheckMessage, request.LastRenewalRequestId, request.ErrorMessage);
+        new(request.Id, request.Domain, request.SubjectAlternativeNames, request.Status, request.AcmeProvider?.Name ?? "-", request.VaultServer?.Name ?? "-", request.VaultSecretPath, request.DnsProvider?.Name, request.CreatedAtUtc, request.IssuedAtUtc, request.StoredAtUtc, request.ScheduleCheck, request.RenewalThresholdDays, request.RenewalCronExpression, request.NextScheduleCheckAtUtc, request.LastScheduleCheckAtUtc, request.LastScheduleCheckStatus, request.LastScheduleCheckMessage, request.LastRenewalRequestId, request.ErrorMessage, request.AcmeAccountId);
 
     private static CertificateRequestDetailDto ToDetailDto(AcmeCertificateRequest request) =>
-        new(request.Id, request.Domain, GetDomains(request), request.SubjectAlternativeNames, request.ChallengeType, request.Status, request.AcmeProviderId, request.AcmeProvider?.Name ?? "-", request.AcmeProvider?.DirectoryUrl ?? new Uri("https://example.com"), request.VaultServerId, request.VaultServer?.Name ?? "-", request.DnsProviderId, request.DnsProvider?.Name, request.VaultSecretPath, request.DnsTxtName, request.DnsTxtValue, request.AcmeOrderLocation, request.CertificatePem, request.FullChainPem, request.ErrorMessage, request.DnsPublishedAtUtc, request.DnsPublishStatus, request.DnsPublishError, request.CertificateId, request.CreatedAtUtc, request.ChallengeCreatedAtUtc, request.IssuedAtUtc, request.StoredAtUtc, request.ScheduleCheck, request.RenewalThresholdDays, request.RenewalCronExpression, request.NextScheduleCheckAtUtc, request.LastScheduleCheckAtUtc, request.LastScheduleCheckStatus, request.LastScheduleCheckMessage, request.RenewedFromRequestId, request.LastRenewalRequestId);
+        new(request.Id, request.Domain, GetDomains(request), request.SubjectAlternativeNames, request.ChallengeType, request.Status, request.AcmeProviderId, request.AcmeProvider?.Name ?? "-", request.AcmeProvider?.DirectoryUrl ?? new Uri("https://example.com"), request.VaultServerId, request.VaultServer?.Name ?? "-", request.DnsProviderId, request.DnsProvider?.Name, request.VaultSecretPath, request.DnsTxtName, request.DnsTxtValue, request.AcmeOrderLocation, request.ErrorMessage, request.DnsPublishedAtUtc, request.DnsPublishStatus, request.DnsPublishError, request.CertificateId, request.CreatedAtUtc, request.ChallengeCreatedAtUtc, request.IssuedAtUtc, request.StoredAtUtc, request.ScheduleCheck, request.RenewalThresholdDays, request.RenewalCronExpression, request.NextScheduleCheckAtUtc, request.LastScheduleCheckAtUtc, request.LastScheduleCheckStatus, request.LastScheduleCheckMessage, request.RenewedFromRequestId, request.LastRenewalRequestId, request.AcmeAccountId);
 
     private static VaultServerDto ToDto(VaultServer server) =>
         new(server.Id, server.Name, server.BaseUrl, server.Description, server.PkiMountPath, !string.IsNullOrWhiteSpace(server.Token), server.ScanPublicEndpoint, server.ImportPkiCertificates, server.IsEnabled, server.CreatedAtUtc, server.UpdatedAtUtc, server.LastSyncAtUtc, server.LastSyncStatus, server.LastSyncError);
@@ -939,7 +624,9 @@ public sealed class CertificateRequestService(CertificateDiscoveryDbContext db, 
         new(provider.Id, provider.Name, provider.ProviderType, provider.DirectoryUrl, provider.AccountEmail, !string.IsNullOrWhiteSpace(provider.ExternalAccountBindingKeyId) || !string.IsNullOrWhiteSpace(provider.ExternalAccountBindingHmacKey), provider.IsStaging, provider.IsEnabled, provider.Notes, provider.CreatedAtUtc, provider.UpdatedAtUtc);
 
     private static DnsProviderDto ToDto(DnsProvider provider) =>
-        new(provider.Id, provider.Name, provider.ProviderType, provider.ZoneName, !string.IsNullOrWhiteSpace(provider.ApiToken), provider.IsEnabled, provider.Notes, provider.CreatedAtUtc, provider.UpdatedAtUtc);
+        new(provider.Id, provider.Name, provider.ProviderType, provider.ZoneName,
+            !string.IsNullOrWhiteSpace(provider.ApiTokenSecretReference) || !string.IsNullOrWhiteSpace(provider.ApiToken),
+            provider.IsEnabled, provider.Notes, provider.CreatedAtUtc, provider.UpdatedAtUtc);
 
     private sealed class CronSchedule
     {

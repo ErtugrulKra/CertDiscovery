@@ -10,15 +10,86 @@
         </div>
         <div class="col-md-6">
             <label class="form-label" asp-for="ProviderType">Provider type</label>
-            <select class="form-select" asp-for="ProviderType" asp-items="Html.GetEnumSelectList<DnsProviderType>()"></select>
+            <select class="form-select" asp-for="ProviderType" asp-items="Html.GetEnumSelectList<DnsProviderType>()" id="dns-provider-type"></select>
         </div>
         <div class="col-md-6">
             <label class="form-label" asp-for="ZoneName">DNS zone</label>
             <input class="form-control" asp-for="ZoneName" placeholder="example.com" />
         </div>
-        <div class="col-md-6">
+        <div class="col-md-6 dns-cloudflare">
             <label class="form-label" asp-for="ApiToken">API token</label>
             <input class="form-control" asp-for="ApiToken" type="password" autocomplete="new-password" placeholder="Leave empty to keep existing token" />
+        </div>
+        <div class="col-12 dns-route53"><h5 class="mt-2">AWS Route53</h5></div>
+        <div class="col-md-6 dns-route53">
+            <label class="form-label" asp-for="HostedZoneId">Hosted zone ID (optional)</label>
+            <input class="form-control" asp-for="HostedZoneId" placeholder="/hostedzone/Z..." />
+        </div>
+        <div class="col-md-6 dns-route53">
+            <label class="form-label" asp-for="AwsAuthenticationMode">Authentication</label>
+            <select class="form-select" asp-for="AwsAuthenticationMode" asp-items="Html.GetEnumSelectList<AwsDnsAuthenticationMode>()"></select>
+        </div>
+        <div class="col-md-6 dns-route53">
+            <label class="form-label" asp-for="RoleArn">Role ARN</label>
+            <input class="form-control" asp-for="RoleArn" />
+        </div>
+        <div class="col-md-6 dns-route53">
+            <label class="form-label" asp-for="Region">Region (optional)</label>
+            <input class="form-control" asp-for="Region" placeholder="eu-central-1" />
+        </div>
+        <div class="col-md-4 dns-route53">
+            <label class="form-label" asp-for="AwsAccessKey">Access key</label>
+            <input class="form-control" asp-for="AwsAccessKey" type="password" autocomplete="new-password" placeholder="Leave empty to keep existing" />
+        </div>
+        <div class="col-md-4 dns-route53">
+            <label class="form-label" asp-for="AwsSecretKey">Secret key</label>
+            <input class="form-control" asp-for="AwsSecretKey" type="password" autocomplete="new-password" placeholder="Leave empty to keep existing" />
+        </div>
+        <div class="col-md-4 dns-route53">
+            <label class="form-label" asp-for="AwsSessionToken">Session token</label>
+            <input class="form-control" asp-for="AwsSessionToken" type="password" autocomplete="new-password" placeholder="Optional" />
+        </div>
+        <div class="col-12 dns-azure"><h5 class="mt-2">Azure DNS</h5></div>
+        <div class="col-md-6 dns-azure">
+            <label class="form-label" asp-for="AzureAuthenticationMode">Authentication</label>
+            <select class="form-select" asp-for="AzureAuthenticationMode" asp-items="Html.GetEnumSelectList<AzureDnsAuthenticationMode>()"></select>
+        </div>
+        <div class="col-md-6 dns-azure">
+            <label class="form-label" asp-for="SubscriptionId">Subscription ID</label>
+            <input class="form-control" asp-for="SubscriptionId" />
+        </div>
+        <div class="col-md-6 dns-azure">
+            <label class="form-label" asp-for="ResourceGroup">Resource group</label>
+            <input class="form-control" asp-for="ResourceGroup" />
+        </div>
+        <div class="col-md-6 dns-azure">
+            <label class="form-label" asp-for="TenantId">Tenant ID</label>
+            <input class="form-control" asp-for="TenantId" />
+        </div>
+        <div class="col-md-6 dns-azure">
+            <label class="form-label" asp-for="ClientId">Client ID</label>
+            <input class="form-control" asp-for="ClientId" />
+        </div>
+        <div class="col-md-6 dns-azure">
+            <label class="form-label" asp-for="AzureClientSecret">Client secret</label>
+            <input class="form-control" asp-for="AzureClientSecret" type="password" autocomplete="new-password" placeholder="Leave empty to keep existing" />
+        </div>
+        <div class="col-md-6 dns-azure">
+            <label class="form-label" asp-for="ManagedIdentityClientId">Managed identity client ID</label>
+            <input class="form-control" asp-for="ManagedIdentityClientId" />
+        </div>
+        <div class="col-12"><h5 class="mt-2">DNS behavior</h5></div>
+        <div class="col-md-4">
+            <label class="form-label" asp-for="TtlSeconds">TTL (seconds)</label>
+            <input class="form-control" asp-for="TtlSeconds" type="number" min="30" max="86400" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" asp-for="PropagationTimeoutSeconds">Propagation timeout</label>
+            <input class="form-control" asp-for="PropagationTimeoutSeconds" type="number" min="10" max="3600" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" asp-for="PropagationPollingIntervalSeconds">Polling interval</label>
+            <input class="form-control" asp-for="PropagationPollingIntervalSeconds" type="number" min="1" max="300" />
         </div>
         <div class="col-12">
             <label class="form-label" asp-for="Notes">Notes</label>
@@ -35,3 +106,16 @@
     <button class="btn btn-primary">Save</button>
     <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
 </form>
+<script>
+(() => {
+    const select = document.getElementById('dns-provider-type');
+    const toggle = () => {
+        const type = select.options[select.selectedIndex].text;
+        document.querySelectorAll('.dns-cloudflare').forEach(x => x.hidden = type !== 'Cloudflare');
+        document.querySelectorAll('.dns-route53').forEach(x => x.hidden = type !== 'Route53');
+        document.querySelectorAll('.dns-azure').forEach(x => x.hidden = type !== 'AzureDns');
+    };
+    select.addEventListener('change', toggle);
+    toggle();
+})();
+</script>

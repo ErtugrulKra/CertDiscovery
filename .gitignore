@@ -82,3 +82,7 @@ desktop.ini
 
 # Keep repository placeholder files when needed
 !.gitkeep
+
+
+#Plan Files
+Plan/*.md

@@ -1,0 +1,7 @@
+@model CertificateDiscovery.Contracts.DeploymentCreateRequest
+@{ ViewData["Title"] = "Deploy certificate"; }
+<div class="page-heading"><div><h2>Deploy stored certificate</h2><p>Select a Vault-backed managed certificate, its destination and deployment policy.</p></div></div><form method="post" class="asset-form"><div asp-validation-summary="ModelOnly" class="text-danger"></div><div class="row g-3">
+<div class="col-12"><label asp-for="CertificateRequestId" class="form-label">Certificate</label><select asp-for="CertificateRequestId" asp-items="ViewBag.CertificateOptions" class="form-select"><option value="">Select the certificate to deploy...</option></select><small class="text-muted">Only certificates successfully stored in Vault are listed.</small></div>
+<div class="col-md-6"><label asp-for="DeploymentTargetId" class="form-label">Deployment target</label><select asp-for="DeploymentTargetId" asp-items="ViewBag.TargetOptions" class="form-select"><option value="">Select the destination target...</option></select></div>
+<div class="col-md-6"><label asp-for="DeploymentPolicyId" class="form-label">Deployment policy</label><select asp-for="DeploymentPolicyId" asp-items="ViewBag.PolicyOptions" class="form-select"><option value="">Select the deployment policy...</option></select></div>
+</div><hr/><button class="btn btn-primary">Create deployment</button> <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></form>

@@ -74,7 +74,6 @@
         </dl>
     </div>
 </section>
-
 <section class="panel">
     <div class="panel-header">
         <h2>Scheduled Renewal</h2>
@@ -175,13 +174,3 @@
         <p class="mb-0">The application will ask the ACME server to validate DNS, issue the certificate, store certificate material in Vault KV v2, and add the certificate to the inventory.</p>
     </div>
 </section>
-
-@if (!string.IsNullOrWhiteSpace(Model.CertificatePem))
-{
-    <section class="panel">
-        <div class="panel-header"><h2>Issued Certificate PEM</h2></div>
-        <div class="panel-body">
-            <textarea class="form-control font-monospace" rows="10" readonly>@Model.CertificatePem</textarea>
-        </div>
-    </section>
-}

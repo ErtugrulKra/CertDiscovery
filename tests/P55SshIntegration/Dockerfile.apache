@@ -1,0 +1,17 @@
+FROM ubuntu:24.04
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server apache2 openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /run/sshd /root/.ssh /etc/apache2/tls \
+    && chmod 700 /root/.ssh \
+    && a2enmod ssl \
+    && openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
+       -keyout /etc/apache2/tls/private-key.pem -out /etc/apache2/tls/certificate.pem \
+    && cp /etc/apache2/tls/certificate.pem /etc/apache2/tls/fullchain.pem \
+    && cp /etc/apache2/tls/certificate.pem /etc/apache2/tls/chain.pem
+COPY apache-ssl.conf /etc/apache2/sites-available/000-default.conf
+COPY systemctl-apache /usr/local/bin/systemctl
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 755 /usr/local/bin/systemctl /entrypoint.sh
+EXPOSE 22 443
+ENTRYPOINT ["/entrypoint.sh"]
