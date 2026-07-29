@@ -1,0 +1,39 @@
+@model CertificateDiscovery.Contracts.KubernetesClusterUpsertRequest
+<form method="post" class="asset-form">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Name">Name</label>
+            <input class="form-control" asp-for="Name" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="ApiServer">API server</label>
+            <input class="form-control" asp-for="ApiServer" placeholder="https://kubernetes.default.svc" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="Namespaces">Namespaces</label>
+            <input class="form-control" asp-for="Namespaces" placeholder="production,staging (empty scans all)" />
+            <div class="form-text">Comma-separated. Empty requires cluster-wide Secret list permission.</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" asp-for="BearerToken">Service-account bearer token</label>
+            <input class="form-control" asp-for="BearerToken" type="password" autocomplete="new-password" placeholder="Leave empty to keep existing token" />
+        </div>
+        <div class="col-12">
+            <label class="form-label" asp-for="Description">Description</label>
+            <textarea class="form-control" asp-for="Description" rows="2"></textarea>
+        </div>
+        <div class="col-md-4">
+            <div class="form-check form-switch">
+                <input class="form-check-input" asp-for="IsEnabled" />
+                <label class="form-check-label" asp-for="IsEnabled">Enabled</label>
+            </div>
+        </div>
+    </div>
+    <div class="alert alert-info mt-3">
+        CertDiscovery reads only Secret metadata and <code>tls.crt</code>. It never reads or stores <code>tls.key</code>.
+    </div>
+    <hr />
+    <button class="btn btn-primary">Save</button>
+    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+</form>

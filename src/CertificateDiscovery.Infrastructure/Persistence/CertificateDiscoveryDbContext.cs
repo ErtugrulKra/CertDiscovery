@@ -16,6 +16,8 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
     public DbSet<AcmeAccountEvent> AcmeAccountEvents => Set<AcmeAccountEvent>();
     public DbSet<SecretRecord> SecretRecords => Set<SecretRecord>();
     public DbSet<DnsProvider> DnsProviders => Set<DnsProvider>();
+    public DbSet<KubernetesCluster> KubernetesClusters => Set<KubernetesCluster>();
+    public DbSet<KubernetesCertificateSource> KubernetesCertificateSources => Set<KubernetesCertificateSource>();
     public DbSet<AcmeCertificateRequest> AcmeCertificateRequests => Set<AcmeCertificateRequest>();
     public DbSet<AssetCertificate> AssetCertificates => Set<AssetCertificate>();
     public DbSet<ScanJob> ScanJobs => Set<ScanJob>();
@@ -194,6 +196,29 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
             entity.Property(x => x.LastSyncStatus).HasMaxLength(60);
             entity.HasIndex(x => x.Name).IsUnique();
             entity.HasIndex(x => x.IsEnabled);
+        });
+
+        modelBuilder.Entity<KubernetesCluster>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.ApiServer).HasConversion(x => x.ToString(), x => new Uri(x)).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(512);
+            entity.Property(x => x.Namespaces).HasMaxLength(2048);
+            entity.Property(x => x.BearerTokenSecretReference).HasMaxLength(512);
+            entity.Property(x => x.LastSyncStatus).HasMaxLength(60);
+            entity.Property(x => x.LastSyncError).HasMaxLength(2048);
+            entity.HasIndex(x => x.Name).IsUnique();
+            entity.HasIndex(x => x.IsEnabled);
+        });
+
+        modelBuilder.Entity<KubernetesCertificateSource>(entity =>
+        {
+            entity.Property(x => x.Namespace).HasMaxLength(253).IsRequired();
+            entity.Property(x => x.SecretName).HasMaxLength(253).IsRequired();
+            entity.HasIndex(x => new { x.KubernetesClusterId, x.Namespace, x.SecretName, x.CertificateId }).IsUnique();
+            entity.HasIndex(x => x.CertificateId);
+            entity.HasOne(x => x.KubernetesCluster).WithMany().HasForeignKey(x => x.KubernetesClusterId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.Certificate).WithMany().HasForeignKey(x => x.CertificateId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<AcmeProvider>(entity =>

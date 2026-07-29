@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.AddScoped<VaultCertificateImportService>();
         services.AddScoped<CertificateRequestService>();
         services.AddScoped<VaultDiscoveryService>();
+        services.AddScoped<KubernetesDiscoveryService>();
         services.AddScoped<DeploymentService>();
         services.AddScoped<DeploymentAgentService>();
         services.AddScoped<AgentDeploymentJobService>();

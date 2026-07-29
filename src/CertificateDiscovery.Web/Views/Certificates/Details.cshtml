@@ -61,6 +61,33 @@
     </div>
 </section>
 
+@if (Model.KubernetesSources?.Count > 0)
+{
+    <section class="panel">
+        <div class="panel-header">
+            <h2>Kubernetes Sources</h2>
+            <span class="text-muted">@Model.KubernetesSources.Count locations</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Cluster</th><th>Namespace</th><th>Secret</th><th>First seen</th><th>Last seen</th></tr></thead>
+                <tbody>
+                @foreach (var source in Model.KubernetesSources)
+                {
+                    <tr>
+                        <td>@source.ClusterName</td>
+                        <td><code>@source.Namespace</code></td>
+                        <td><code>@source.SecretName</code></td>
+                        <td>@source.FirstSeenAtUtc.ToLocalTime().ToString("g")</td>
+                        <td>@source.LastSeenAtUtc.ToLocalTime().ToString("g")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
 <section class="panel">
     <div class="panel-header">
         <h2>Certificate Chain</h2>

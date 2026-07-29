@@ -21,7 +21,13 @@ public sealed class IntegrationService(
         new(
             await db.VaultServers.AsNoTracking().OrderBy(x => x.Name).Select(x => ToDto(x)).ToListAsync(cancellationToken),
             (await db.AcmeProviders.AsNoTracking().Include(x => x.Accounts).OrderBy(x => x.Name).ToListAsync(cancellationToken)).Select(ToDto).ToList(),
-            await db.DnsProviders.AsNoTracking().OrderBy(x => x.Name).Select(x => ToDto(x)).ToListAsync(cancellationToken));
+            await db.DnsProviders.AsNoTracking().OrderBy(x => x.Name).Select(x => ToDto(x)).ToListAsync(cancellationToken),
+            await db.KubernetesClusters.AsNoTracking().OrderBy(x => x.Name)
+                .Select(x => new KubernetesClusterDto(
+                    x.Id, x.Name, x.ApiServer, x.Description, x.Namespaces,
+                    x.BearerTokenSecretReference != null, x.IsEnabled, x.CreatedAtUtc,
+                    x.UpdatedAtUtc, x.LastSyncAtUtc, x.LastSyncStatus, x.LastSyncError))
+                .ToListAsync(cancellationToken));
 
     public async Task<VaultServerDto?> GetVaultAsync(Guid id, CancellationToken cancellationToken)
     {
