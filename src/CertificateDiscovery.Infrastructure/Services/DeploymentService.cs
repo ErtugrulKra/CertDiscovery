@@ -4,6 +4,7 @@ using CertificateDiscovery.Application.Secrets;
 using CertificateDiscovery.Contracts;
 using CertificateDiscovery.Domain;
 using CertificateDiscovery.Domain.Entities;
+using CertificateDiscovery.Infrastructure.Deployment;
 using CertificateDiscovery.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,6 +35,7 @@ public sealed class DeploymentService(
     public async Task CreateTargetAsync(DeploymentTargetUpsertRequest request, CancellationToken cancellationToken)
     {
         ValidateTargetConfiguration(request);
+        ValidateAzureKeyVaultSecret(request, hasExistingAzureSecret: false);
         await ValidateDeploymentAgentAsync(request, cancellationToken);
         var target = new DeploymentTarget
         {
@@ -59,6 +61,17 @@ public sealed class DeploymentService(
         await ValidateDeploymentAgentAsync(request, cancellationToken);
         var target = await db.DeploymentTargets.FindAsync([id], cancellationToken);
         if (target is null) return false;
+        var hasExistingAzureSecret =
+            target.TargetType == DeploymentTargetType.AzureKeyVault &&
+            !string.IsNullOrWhiteSpace(target.SecretReference);
+        ValidateAzureKeyVaultSecret(request, hasExistingAzureSecret);
+        if (request.TargetType == DeploymentTargetType.AzureKeyVault &&
+            AzureOptions(request).AuthenticationMode != AzureKeyVaultAuthenticationMode.ServicePrincipal &&
+            !string.IsNullOrWhiteSpace(target.SecretReference))
+        {
+            await secrets.DeleteAsync(target.SecretReference, cancellationToken);
+            target.SecretReference = null;
+        }
         target.Name = request.Name.Trim(); target.TargetType = request.TargetType; target.AssetId = request.AssetId;
         target.DeploymentAgentId = request.TargetType == DeploymentTargetType.Iis ? request.DeploymentAgentId : null;
         target.ConfigurationJson = NormalizeTargetJson(request); target.IsEnabled = request.IsEnabled; target.UpdatedAtUtc = DateTime.UtcNow;
@@ -167,7 +180,7 @@ public sealed class DeploymentService(
         x.CertificateRequest.Domain, x.CertificateId, x.DeploymentTargetId, x.DeploymentTarget.Name, x.DeploymentPolicyId,
         x.DeploymentPolicy.Name, x.Status, x.Origin, x.Attempt, x.ExpectedFingerprint, x.ObservedFingerprint,
         x.ErrorCode, x.ErrorMessage, x.BackupReference, x.RollbackStatus, x.VerificationStatus, x.RequestedBy,
-        x.ApprovedBy, x.CreatedAtUtc, x.StartedAtUtc, x.CompletedAtUtc);
+        x.ApprovedBy, x.CreatedAtUtc, x.StartedAtUtc, x.CompletedAtUtc, x.ExternalResourceReference);
     private static DeploymentTargetDto ToDto(DeploymentTarget x) => new(x.Id, x.Name, x.TargetType, x.AssetId, x.ConfigurationJson,
         !string.IsNullOrWhiteSpace(x.SecretReference), x.IsEnabled, x.CreatedAtUtc, x.UpdatedAtUtc,
         x.DeploymentAgentId, x.DeploymentAgent == null ? null : $"{x.DeploymentAgent.Name} ({x.DeploymentAgent.MachineName})");
@@ -188,6 +201,7 @@ public sealed class DeploymentService(
             DeploymentTargetType.FileSystem => new[] { "outputDirectory", "certificateFile", "privateKeyFile", "fullChainFile" },
             DeploymentTargetType.Kubernetes => new[] { "apiServer", "namespace", "secretName" },
             DeploymentTargetType.AwsAcm => new[] { "region", "authenticationMode" },
+            DeploymentTargetType.AzureKeyVault => new[] { "vaultUri", "certificateName", "authenticationMode", "importFormat", "contentType" },
             _ => []
         };
         var missing = required.Where(name =>
@@ -196,7 +210,32 @@ public sealed class DeploymentService(
             value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())).ToList();
         if (missing.Count > 0)
             throw new ArgumentException($"{request.TargetType.GetDisplayName()} configuration requires: {string.Join(", ", missing)}.");
+        if (request.TargetType == DeploymentTargetType.AzureKeyVault)
+            _ = AzureOptions(request);
     }
+
+    private static void ValidateAzureKeyVaultSecret(
+        DeploymentTargetUpsertRequest request,
+        bool hasExistingAzureSecret)
+    {
+        if (request.TargetType != DeploymentTargetType.AzureKeyVault) return;
+        var options = AzureOptions(request);
+        if (options.AuthenticationMode == AzureKeyVaultAuthenticationMode.ServicePrincipal)
+        {
+            if (string.IsNullOrWhiteSpace(request.Secret) && !hasExistingAzureSecret)
+                throw new ArgumentException("Azure Key Vault ServicePrincipal authentication requires a client secret.");
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(request.Secret))
+            throw new ArgumentException("Azure Key Vault Secret is accepted only with ServicePrincipal authentication.");
+    }
+
+    private static AzureKeyVaultTargetOptions AzureOptions(DeploymentTargetUpsertRequest request) =>
+        AzureKeyVaultTargetOptions.Parse(new DeploymentTarget
+        {
+            TargetType = DeploymentTargetType.AzureKeyVault,
+            ConfigurationJson = NormalizeJson(request.ConfigurationJson)
+        });
 
     private async Task ValidateDeploymentAgentAsync(
         DeploymentTargetUpsertRequest request,

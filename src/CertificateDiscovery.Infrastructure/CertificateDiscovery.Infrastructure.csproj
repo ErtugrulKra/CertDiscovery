@@ -10,11 +10,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CertificateDiscovery.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Certes" Version="3.0.4" />
     <PackageReference Include="AWSSDK.Route53" Version="4.0.8.27" />
     <PackageReference Include="AWSSDK.CertificateManager" Version="4.0.2.15" />
     <PackageReference Include="AWSSDK.SecurityToken" Version="4.0.2" />
     <PackageReference Include="Azure.Identity" Version="1.13.2" />
+    <PackageReference Include="Azure.Security.KeyVault.Certificates" Version="4.8.0" />
     <PackageReference Include="Azure.ResourceManager.Dns" Version="1.1.1" />
     <PackageReference Include="DnsClient" Version="1.8.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.18" />

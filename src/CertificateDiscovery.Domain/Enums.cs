@@ -29,6 +29,8 @@ public enum DnsProviderType { Cloudflare, Generic, Route53, AzureDns }
 public enum AwsDnsAuthenticationMode { DefaultCredentialChain, AssumeRole, WorkloadIdentity, StaticCredentials }
 public enum AwsAcmAuthenticationMode { DefaultCredentialChain, AssumeRole, WorkloadIdentity }
 public enum AzureDnsAuthenticationMode { DefaultAzureCredential, ManagedIdentity, WorkloadIdentity, ServicePrincipal }
+public enum AzureKeyVaultAuthenticationMode { DefaultAzureCredential, ManagedIdentity, WorkloadIdentity, ServicePrincipal }
+public enum AzureKeyVaultImportFormat { Pfx, Pem }
 public enum CertificateRequestType { Standard, Wildcard }
 public enum CertificateRequestStatus { Draft, PendingDns, ReadyToValidate, Validating, Issued, StoredInVault, Failed }
 public enum AcmeChallengeType { ManualDns01 }
@@ -45,7 +47,8 @@ public enum DeploymentTargetType
     [Display(Name = "Apache Web Server")] ApacheWebServer,
     [Display(Name = "Vault KV")] VaultKv,
     [Display(Name = "File System Export")] FileSystem,
-    [Display(Name = "AWS ACM")] AwsAcm
+    [Display(Name = "AWS ACM")] AwsAcm,
+    [Display(Name = "Azure Key Vault")] AzureKeyVault
 }
 public enum CertificateDeploymentStatus
 {

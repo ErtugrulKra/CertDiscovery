@@ -2,7 +2,7 @@ using Amazon;
 using Amazon.Route53;
 using Amazon.Route53.Model;
 using Amazon.Runtime;
-using Amazon.Runtime.CredentialManagement;
+using Amazon.Runtime.Credentials;
 using CertificateDiscovery.Application.Dns;
 using CertificateDiscovery.Application.Secrets;
 using CertificateDiscovery.Domain;
@@ -115,7 +115,7 @@ public sealed class Route53DnsChallengeProvider(
         {
             AwsDnsAuthenticationMode.StaticCredentials => await CreateStaticCredentialsAsync(provider, cancellationToken),
             AwsDnsAuthenticationMode.AssumeRole => new AssumeRoleAWSCredentials(
-                FallbackCredentialsFactory.GetCredentials(),
+                DefaultAWSCredentialsIdentityResolver.GetCredentials(config),
                 provider.RoleArn!,
                 $"certdiscovery-{provider.Id:N}"),
             _ => null
@@ -146,7 +146,13 @@ public sealed class Route53DnsChallengeProvider(
             DNSName = normalizedZone,
             MaxItems = "100"
         }, cancellationToken);
-        var matches = response.HostedZones.Where(x => NormalizeName(x.Name) == normalizedZone).ToList();
+        return SelectHostedZone(response.HostedZones, provider);
+    }
+
+    internal static HostedZone SelectHostedZone(IEnumerable<HostedZone> hostedZones, DnsProvider provider)
+    {
+        var normalizedZone = NormalizeName(provider.ZoneName);
+        var matches = hostedZones.Where(x => NormalizeName(x.Name) == normalizedZone).ToList();
         if (matches.Count == 0) throw new InvalidOperationException($"Route53 hosted zone '{provider.ZoneName}' was not found.");
         if (matches.Count > 1)
             throw new InvalidOperationException($"Route53 hosted zone '{provider.ZoneName}' is ambiguous (public/private or duplicate zones). Configure HostedZoneId explicitly.");
@@ -177,11 +183,16 @@ public sealed class Route53DnsChallengeProvider(
         throw new TimeoutException("Route53 change did not reach INSYNC before the configured timeout.");
     }
 
-    private static void ValidateRequiredConfiguration(DnsProvider provider)
+    internal static void ValidateRequiredConfiguration(DnsProvider provider)
     {
         if (string.IsNullOrWhiteSpace(provider.ZoneName)) throw new InvalidOperationException("Route53 zone name is required.");
         if (provider.AwsAuthenticationMode == AwsDnsAuthenticationMode.AssumeRole && string.IsNullOrWhiteSpace(provider.RoleArn))
             throw new InvalidOperationException("Route53 assume-role authentication requires a role ARN.");
+        if (provider.AwsAuthenticationMode == AwsDnsAuthenticationMode.StaticCredentials &&
+            (string.IsNullOrWhiteSpace(provider.AccessKeySecretReference) ||
+             string.IsNullOrWhiteSpace(provider.SecretKeySecretReference)))
+            throw new InvalidOperationException(
+                "Route53 static authentication requires stored access-key and secret-key references.");
     }
 
     internal static string NormalizeName(string value) => value.Trim().TrimStart('*', '.').TrimEnd('.').ToLowerInvariant();

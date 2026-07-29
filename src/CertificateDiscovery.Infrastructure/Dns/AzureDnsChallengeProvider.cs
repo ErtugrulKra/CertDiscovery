@@ -119,7 +119,7 @@ public sealed class AzureDnsChallengeProvider(
         return (await records.GetAsync(name, cancellationToken)).Value;
     }
 
-    private static void ValidateRequiredConfiguration(DnsProvider provider)
+    internal static void ValidateRequiredConfiguration(DnsProvider provider)
     {
         if (string.IsNullOrWhiteSpace(provider.SubscriptionId)) throw new InvalidOperationException("Azure subscription ID is required.");
         if (string.IsNullOrWhiteSpace(provider.ResourceGroup)) throw new InvalidOperationException("Azure resource group is required.");
