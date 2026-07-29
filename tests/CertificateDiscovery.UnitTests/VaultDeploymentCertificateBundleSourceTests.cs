@@ -24,8 +24,23 @@ public sealed class VaultDeploymentCertificateBundleSourceTests
         Assert.Equal(certificate.PrivateKeyPem, bundle.PrivateKeyPem);
         Assert.Equal(certificate.FullChainPem, bundle.FullChainPem);
         Assert.Equal(certificate.Fingerprint, bundle.Fingerprint);
+        Assert.Equal(9, bundle.VaultVersion);
         Assert.Equal("/v1/secret/data/certificates/example.com", handler.Path);
         Assert.Equal("vault-token", handler.Token);
+    }
+
+    [Fact]
+    public async Task Specific_vault_version_can_be_loaded_for_rollback_without_expected_fingerprint_match()
+    {
+        var certificate = CreateCertificate();
+        var handler = new VaultReadHandler(certificate);
+        var source = new VaultDeploymentCertificateBundleSource(new TestHttpClientFactory(handler));
+        var deployment = Deployment(new string('F', 64));
+
+        var bundle = await source.LoadVersionAsync(deployment, 8, default);
+
+        Assert.Equal(certificate.Fingerprint, bundle.Fingerprint);
+        Assert.Equal("?version=8", handler.Query);
     }
 
     [Fact]
@@ -93,10 +108,12 @@ public sealed class VaultDeploymentCertificateBundleSourceTests
     {
         public string? Path { get; private set; }
         public string? Token { get; private set; }
+        public string? Query { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Path = request.RequestUri?.AbsolutePath;
+            Query = request.RequestUri?.Query;
             Token = request.Headers.GetValues("X-Vault-Token").Single();
             var body = status == HttpStatusCode.OK
                 ? JsonSerializer.Serialize(new

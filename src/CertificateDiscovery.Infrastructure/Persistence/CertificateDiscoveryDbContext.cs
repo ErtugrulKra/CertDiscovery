@@ -331,6 +331,7 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
             entity.Property(x => x.ErrorCode).HasMaxLength(120);
             entity.Property(x => x.ErrorMessage).HasMaxLength(2048);
             entity.Property(x => x.BackupReference).HasMaxLength(1024);
+            entity.Property(x => x.ExternalResourceReference).HasMaxLength(1024);
             entity.Property(x => x.RollbackStatus).HasMaxLength(512);
             entity.Property(x => x.VerificationStatus).HasMaxLength(512);
             entity.Property(x => x.RequestedBy).HasMaxLength(160);

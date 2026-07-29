@@ -5,7 +5,12 @@ namespace CertificateDiscovery.Application.Deployment;
 
 public sealed record DeploymentTargetContext(DeploymentTarget Target, string? Secret);
 public sealed record DeploymentContext(CertificateDeployment Deployment, DeploymentTarget Target, DeploymentPolicy Policy, string? Secret = null);
-public sealed record IssuedCertificateBundle(string CertificatePem, string PrivateKeyPem, string FullChainPem, string Fingerprint);
+public sealed record IssuedCertificateBundle(
+    string CertificatePem,
+    string PrivateKeyPem,
+    string FullChainPem,
+    string Fingerprint,
+    int? VaultVersion = null);
 public sealed record DeploymentValidationResult(bool IsValid, string? Message = null);
 public sealed record DeploymentPrecheckResult(bool IsReady, string? PreviousFingerprint = null, string? Message = null);
 public sealed record DeploymentBackupResult(bool Succeeded, string? BackupReference = null, string? Message = null);
@@ -40,6 +45,14 @@ public interface ICertificateBundleConverter
 public interface IDeploymentCertificateBundleSource
 {
     Task<IssuedCertificateBundle> LoadAsync(CertificateDeployment deployment, CancellationToken cancellationToken);
+}
+
+public interface IVersionedDeploymentCertificateBundleSource : IDeploymentCertificateBundleSource
+{
+    Task<IssuedCertificateBundle> LoadVersionAsync(
+        CertificateDeployment deployment,
+        int version,
+        CancellationToken cancellationToken);
 }
 
 public interface IDeploymentStateMachine

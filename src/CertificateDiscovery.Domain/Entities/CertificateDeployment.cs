@@ -23,6 +23,7 @@ public sealed class CertificateDeployment
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
     public string? BackupReference { get; set; }
+    public string? ExternalResourceReference { get; set; }
     public string? RollbackStatus { get; set; }
     public string? VerificationStatus { get; set; }
     public string? RequestedBy { get; set; }

@@ -27,6 +27,7 @@ public enum AcmeProviderType { Generic, LetsEncrypt, ZeroSsl, Buypass, GoogleTru
 public enum AcmeAccountStatus { Active, Disabled, Deactivated }
 public enum DnsProviderType { Cloudflare, Generic, Route53, AzureDns }
 public enum AwsDnsAuthenticationMode { DefaultCredentialChain, AssumeRole, WorkloadIdentity, StaticCredentials }
+public enum AwsAcmAuthenticationMode { DefaultCredentialChain, AssumeRole, WorkloadIdentity }
 public enum AzureDnsAuthenticationMode { DefaultAzureCredential, ManagedIdentity, WorkloadIdentity, ServicePrincipal }
 public enum CertificateRequestType { Standard, Wildcard }
 public enum CertificateRequestStatus { Draft, PendingDns, ReadyToValidate, Validating, Issued, StoredInVault, Failed }
@@ -43,7 +44,8 @@ public enum DeploymentTargetType
     [Display(Name = "Traefik")] Traefik,
     [Display(Name = "Apache Web Server")] ApacheWebServer,
     [Display(Name = "Vault KV")] VaultKv,
-    [Display(Name = "File System Export")] FileSystem
+    [Display(Name = "File System Export")] FileSystem,
+    [Display(Name = "AWS ACM")] AwsAcm
 }
 public enum CertificateDeploymentStatus
 {

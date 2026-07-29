@@ -8,10 +8,26 @@ using CertificateDiscovery.Domain.Entities;
 namespace CertificateDiscovery.Infrastructure.Deployment;
 
 public sealed class VaultDeploymentCertificateBundleSource(IHttpClientFactory httpClientFactory)
-    : IDeploymentCertificateBundleSource
+    : IVersionedDeploymentCertificateBundleSource
 {
-    public async Task<IssuedCertificateBundle> LoadAsync(
+    public Task<IssuedCertificateBundle> LoadAsync(
         CertificateDeployment deployment,
+        CancellationToken cancellationToken) =>
+        LoadCoreAsync(deployment, null, requireExpectedFingerprint: true, cancellationToken);
+
+    public Task<IssuedCertificateBundle> LoadVersionAsync(
+        CertificateDeployment deployment,
+        int version,
+        CancellationToken cancellationToken)
+    {
+        if (version < 1) throw new ArgumentOutOfRangeException(nameof(version));
+        return LoadCoreAsync(deployment, version, requireExpectedFingerprint: false, cancellationToken);
+    }
+
+    private async Task<IssuedCertificateBundle> LoadCoreAsync(
+        CertificateDeployment deployment,
+        int? version,
+        bool requireExpectedFingerprint,
         CancellationToken cancellationToken)
     {
         var request = deployment.CertificateRequest
@@ -23,7 +39,10 @@ public sealed class VaultDeploymentCertificateBundleSource(IHttpClientFactory ht
         var (mount, path) = SplitPath(request.VaultSecretPath);
         var client = httpClientFactory.CreateClient();
         client.BaseAddress = vault.BaseUrl;
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, $"/v1/{mount}/data/{path}");
+        var requestPath = $"/v1/{mount}/data/{path}";
+        if (version is not null)
+            requestPath += $"?version={version.Value}";
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, requestPath);
         httpRequest.Headers.Add("X-Vault-Token", vault.Token);
         using var response = await client.SendAsync(httpRequest, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound)
@@ -33,7 +52,10 @@ public sealed class VaultDeploymentCertificateBundleSource(IHttpClientFactory ht
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         if (!document.RootElement.TryGetProperty("data", out var outer) ||
-            !outer.TryGetProperty("data", out var data))
+            !outer.TryGetProperty("data", out var data) ||
+            !outer.TryGetProperty("metadata", out var metadata) ||
+            !metadata.TryGetProperty("version", out var versionElement) ||
+            !versionElement.TryGetInt32(out var observedVersion))
             throw new InvalidOperationException("Vault KV v2 response does not contain certificate data.");
         var certificatePem = Required(data, "certificate_pem");
         var privateKeyPem = Required(data, "private_key_pem");
@@ -43,9 +65,10 @@ public sealed class VaultDeploymentCertificateBundleSource(IHttpClientFactory ht
                           !string.IsNullOrWhiteSpace(storedFingerprint.GetString())
             ? storedFingerprint.GetString()!
             : Fingerprint(certificatePem);
-        if (!string.Equals(fingerprint, deployment.ExpectedFingerprint, StringComparison.OrdinalIgnoreCase))
+        if (requireExpectedFingerprint &&
+            !string.Equals(fingerprint, deployment.ExpectedFingerprint, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The latest Vault certificate version does not match the deployment fingerprint.");
-        return new(certificatePem, privateKeyPem, fullChainPem, fingerprint);
+        return new(certificatePem, privateKeyPem, fullChainPem, fingerprint, observedVersion);
     }
 
     private static (string Mount, string Path) SplitPath(string value)

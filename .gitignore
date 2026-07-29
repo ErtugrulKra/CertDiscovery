@@ -84,5 +84,5 @@ desktop.ini
 !.gitkeep
 
 
-#Plan Files
-Plan/*.md
+# Plan files (local planning docs; not tracked)
+Plan/
