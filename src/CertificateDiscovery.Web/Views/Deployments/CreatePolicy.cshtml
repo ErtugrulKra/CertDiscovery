@@ -1,12 +1,19 @@
 @model CertificateDiscovery.Contracts.DeploymentPolicyUpsertRequest
+@using CertificateDiscovery.Domain
 @{ ViewData["Title"] = "New deployment policy"; }
 <div class="page-heading"><h2>New deployment policy</h2></div><form method="post" class="asset-form"><div asp-validation-summary="ModelOnly" class="text-danger"></div><div class="row g-3">
 <div class="col-md-6"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control"/></div>
 <div class="col-md-3"><label asp-for="MaxAttempts" class="form-label"></label><input asp-for="MaxAttempts" class="form-control"/></div>
 <div class="col-md-3"><label asp-for="RetryDelaySeconds" class="form-label"></label><input asp-for="RetryDelaySeconds" class="form-control"/></div>
 <div class="col-md-3"><label asp-for="VerificationTimeoutSeconds" class="form-label"></label><input asp-for="VerificationTimeoutSeconds" class="form-control"/></div>
+<div class="col-md-3"><label asp-for="VerificationQuorumMode" class="form-label">Quorum mode</label><select asp-for="VerificationQuorumMode" asp-items="Html.GetEnumSelectList<VerificationQuorumMode>()" class="form-select"></select></div>
+<div class="col-md-3"><label asp-for="VerificationQuorumPercentage" class="form-label">Quorum percentage</label><input asp-for="VerificationQuorumPercentage" class="form-control"/></div>
+<div class="col-md-3"><label asp-for="VerificationMinimumSuccessfulNodes" class="form-label">Minimum successful nodes</label><input asp-for="VerificationMinimumSuccessfulNodes" class="form-control"/></div>
+<div class="col-md-3"><label asp-for="VerificationAttempts" class="form-label">Verification attempts</label><input asp-for="VerificationAttempts" class="form-control"/></div>
+<div class="col-md-3"><label asp-for="VerificationIntervalSeconds" class="form-label">Interval seconds</label><input asp-for="VerificationIntervalSeconds" class="form-control"/></div>
 <div class="col-md-3 form-check mt-5"><input asp-for="RequireApproval" class="form-check-input"/><label asp-for="RequireApproval" class="form-check-label"></label></div>
 <div class="col-md-3 form-check mt-5"><input asp-for="AutomaticDeployment" class="form-check-input"/><label asp-for="AutomaticDeployment" class="form-check-label"></label></div>
 <div class="col-md-3 form-check mt-5"><input asp-for="RollbackOnFailure" class="form-check-input"/><label asp-for="RollbackOnFailure" class="form-check-label"></label></div>
+<div class="col-md-3 form-check mt-5"><input asp-for="RollbackOnPartialVerification" class="form-check-input"/><label asp-for="RollbackOnPartialVerification" class="form-check-label">Rollback partial rollout</label></div>
 <div class="col-md-3 form-check mt-5"><input asp-for="IsEnabled" class="form-check-input"/><label asp-for="IsEnabled" class="form-check-label"></label></div>
 </div><hr/><button class="btn btn-primary">Save</button> <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></form>

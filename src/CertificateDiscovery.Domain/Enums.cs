@@ -55,8 +55,11 @@ public enum DeploymentTargetType
 public enum CertificateDeploymentStatus
 {
     Pending, AwaitingApproval, Prechecking, BackingUp, Deploying, Activating, Verifying,
-    Succeeded, Failed, RollingBack, RolledBack, RollbackFailed, Cancelled, Rejected
+    PartiallyVerified, Succeeded, Failed, RollingBack, RolledBack, RollbackFailed, Cancelled, Rejected
 }
+public enum VerificationQuorumMode { All, Any, Percentage }
+public enum DeploymentVerificationOutcome { Verified, PartiallyVerified, Failed }
+public enum EndpointVerificationOutcome { Verified, FingerprintMismatch, SanMismatch, Expired, NotYetValid, ChainInvalid, Unreachable }
 public enum DeploymentJobStatus { Pending, Claimed, Completed, DeadLetter, Cancelled }
 public enum DeploymentOrigin { Manual, Automatic, Retry }
 public enum DeploymentAgentStatus

@@ -124,17 +124,8 @@ public sealed class AzureKeyVaultCertificateDeployer(
         if (context.Deployment.ExternalResourceReference is not null &&
             !string.Equals(current.CertificateUri, context.Deployment.ExternalResourceReference, StringComparison.OrdinalIgnoreCase))
             return new(false, current.Fingerprint, "Azure Key Vault current version URI changed during verification.");
-        if (options.ExternalVerificationEndpoints.Count > 0)
-        {
-            var external = await tlsVerifier.VerifyAsync(
-                options.ExternalVerificationEndpoints,
-                bundle.Fingerprint,
-                cancellationToken);
-            if (!external.Succeeded)
-                return new(false, external.ObservedFingerprint, external.Message);
-        }
         return new(true, current.Fingerprint,
-            $"Azure Key Vault certificate version '{current.Version}' and configured TLS endpoints were verified.");
+            $"Azure Key Vault certificate version '{current.Version}' internal state was verified.");
     }
 
     public async Task<DeploymentRollbackResult> RollbackAsync(

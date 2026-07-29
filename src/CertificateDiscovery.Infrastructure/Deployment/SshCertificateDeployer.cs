@@ -10,7 +10,7 @@ namespace CertificateDiscovery.Infrastructure.Deployment;
 public abstract class SshCertificateDeployer(
     ISshCredentialSource credentials,
     ISshRemoteClient remote,
-    ITlsEndpointVerifier tlsVerifier) : ICertificateDeployer
+    ITlsEndpointVerifier _) : ICertificateDeployer
 {
     public abstract DeploymentTargetType TargetType { get; }
 
@@ -132,15 +132,8 @@ public abstract class SshCertificateDeployer(
                 if (!string.Equals(expected, observed, StringComparison.Ordinal))
                     return new(false, Message: $"Remote file '{file.Path}' failed SHA-256 verification.");
             }
-            if (options.ExternalVerificationEndpoints.Count > 0)
-            {
-                var external = await tlsVerifier.VerifyAsync(
-                    options.ExternalVerificationEndpoints, bundle.Fingerprint, cancellationToken);
-                if (!external.Succeeded)
-                    return new(false, external.ObservedFingerprint, external.Message);
-            }
             return new(true, bundle.Fingerprint,
-                $"{DisplayName()} remote file hashes and external TLS endpoints verified.");
+                $"{DisplayName()} remote file hashes were verified.");
         }
         catch (Exception exception) when (IsExpected(exception))
         {

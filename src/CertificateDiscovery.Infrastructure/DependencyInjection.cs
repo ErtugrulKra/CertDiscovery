@@ -75,7 +75,10 @@ public static class DependencyInjection
         services.AddScoped<ICertificateDeployer, IisAgentCertificateDeployer>();
         services.AddScoped<ISshCredentialSource, VaultSshCredentialSource>();
         services.AddScoped<ISshRemoteClient, SshNetRemoteClient>();
-        services.AddScoped<ITlsEndpointVerifier, TlsEndpointVerifier>();
+        services.AddScoped<ITlsCertificateProbe, TlsCertificateProbe>();
+        services.AddScoped<TlsEndpointVerifier>();
+        services.AddScoped<ITlsEndpointVerifier>(provider => provider.GetRequiredService<TlsEndpointVerifier>());
+        services.AddScoped<IMultiNodeTlsVerifier>(provider => provider.GetRequiredService<TlsEndpointVerifier>());
         services.AddScoped<IAwsAcmClientFactory, AwsAcmClientFactory>();
         services.AddScoped<IAwsAcmGateway, AwsAcmGateway>();
         services.AddScoped<ICertificateDeployer, AwsAcmCertificateDeployer>();

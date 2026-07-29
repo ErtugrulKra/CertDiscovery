@@ -85,6 +85,39 @@ public sealed class DeploymentArchitectureTests
     }
 
     [Fact]
+    public async Task Partial_rollout_is_persisted_when_policy_does_not_require_rollback()
+    {
+        await using var fixture = await DbFixture.CreateAsync();
+        var request = fixture.SeedStoredRequest();
+        var target = new DeploymentTarget
+        {
+            Name = "multi-node",
+            TargetType = DeploymentTargetType.Fake,
+            ConfigurationJson = "{\"externalVerificationEndpoints\":[\"https://a.example.com\",\"https://b.example.com\"]}"
+        };
+        var policy = new DeploymentPolicy
+        {
+            Name = "partial",
+            RequireApproval = false,
+            RollbackOnFailure = true,
+            RollbackOnPartialVerification = false
+        };
+        fixture.Db.AddRange(target, policy);
+        await fixture.Db.SaveChangesAsync();
+        var verifier = new FakeMultiNodeVerifier(DeploymentVerificationOutcome.PartiallyVerified);
+        var orchestrator = CreateOrchestrator(fixture.Db, verifier);
+        var id = await orchestrator.CreateAsync(request.Id, target.Id, policy.Id, "test", DeploymentOrigin.Manual, default);
+
+        await orchestrator.ExecuteAsync(id, "test-worker", default);
+
+        var deployment = await fixture.Db.CertificateDeployments.FindAsync(id);
+        var run = await fixture.Db.DeploymentVerificationRuns.Include(x => x.Endpoints).SingleAsync();
+        Assert.Equal(CertificateDeploymentStatus.PartiallyVerified, deployment!.Status);
+        Assert.Equal(DeploymentVerificationOutcome.PartiallyVerified, run.Outcome);
+        Assert.Equal(2, run.Endpoints.Count);
+    }
+
+    [Fact]
     public void Bundle_converter_creates_password_protected_pfx_without_temporary_files()
     {
         using var rsa = RSA.Create(2048);
@@ -99,10 +132,37 @@ public sealed class DeploymentArchitectureTests
         Assert.Equal(X509ContentType.Pkcs12, X509Certificate2.GetCertContentType(converted.Pfx));
     }
 
-    private static CertificateDeploymentOrchestrator CreateOrchestrator(CertificateDiscoveryDbContext db)
+    private static CertificateDeploymentOrchestrator CreateOrchestrator(
+        CertificateDiscoveryDbContext db,
+        IMultiNodeTlsVerifier? verifier = null)
     {
         var fake = new FakeCertificateDeployer();
-        return new(db, new CertificateDeployerResolver([fake]), new DeploymentStateMachine(), new DeploymentQueue(db), new NoopSecrets(), new TestBundleSource());
+        return verifier is null
+            ? new(db, new CertificateDeployerResolver([fake]), new DeploymentStateMachine(), new DeploymentQueue(db), new NoopSecrets(), new TestBundleSource())
+            : new(db, new CertificateDeployerResolver([fake]), new DeploymentStateMachine(), new DeploymentQueue(db), new NoopSecrets(), new TestBundleSource(), verifier);
+    }
+
+    private sealed class FakeMultiNodeVerifier(DeploymentVerificationOutcome outcome) : IMultiNodeTlsVerifier
+    {
+        public Task<(VerificationQuorumResult Quorum, IReadOnlyList<DeploymentEndpointVerification> Endpoints)> VerifyAsync(
+            IReadOnlyList<Uri> endpoints, string expectedFingerprint, DeploymentPolicy policy, CancellationToken cancellationToken)
+        {
+            var observed = new[]
+            {
+                Endpoint(endpoints[0], expectedFingerprint, EndpointVerificationOutcome.Verified),
+                Endpoint(endpoints[1], "OLD", EndpointVerificationOutcome.FingerprintMismatch)
+            };
+            return Task.FromResult((
+                new VerificationQuorumResult(outcome, 2, 1, 2, 2, "Partial rollout detected."),
+                (IReadOnlyList<DeploymentEndpointVerification>)observed));
+        }
+        private static DeploymentEndpointVerification Endpoint(Uri endpoint, string fingerprint, EndpointVerificationOutcome outcome) =>
+            new()
+            {
+                Endpoint = endpoint.ToString(), ExpectedFingerprint = "ABC123", ObservedFingerprint = fingerprint,
+                FingerprintMatches = outcome == EndpointVerificationOutcome.Verified, SanMatches = true,
+                TimeValid = true, ChainValid = true, Outcome = outcome
+            };
     }
 
     private sealed class NoopSecrets : ISecretProvider

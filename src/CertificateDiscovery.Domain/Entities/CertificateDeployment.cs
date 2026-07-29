@@ -26,9 +26,12 @@ public sealed class CertificateDeployment
     public string? ExternalResourceReference { get; set; }
     public string? RollbackStatus { get; set; }
     public string? VerificationStatus { get; set; }
+    public string? InternalVerificationStatus { get; set; }
+    public string? ExternalVerificationStatus { get; set; }
     public string? RequestedBy { get; set; }
     public string? ApprovedBy { get; set; }
     public DateTime? ApprovedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAtUtc { get; set; }
+    public ICollection<DeploymentVerificationRun> VerificationRuns { get; set; } = new List<DeploymentVerificationRun>();
 }

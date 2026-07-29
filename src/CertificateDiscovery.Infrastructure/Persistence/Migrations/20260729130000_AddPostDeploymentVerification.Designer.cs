@@ -3,6 +3,7 @@ using System;
 using CertificateDiscovery.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CertificateDiscovery.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CertificateDiscoveryDbContext))]
-    partial class CertificateDiscoveryDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260729130000_AddPostDeploymentVerification")]
+    partial class AddPostDeploymentVerification
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.18");

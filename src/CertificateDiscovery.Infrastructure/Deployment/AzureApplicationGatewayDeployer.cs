@@ -85,8 +85,7 @@ public sealed class AzureApplicationGatewayDeployer(
         if (options.DeploymentMode == AzureApplicationGatewayDeploymentMode.KeyVaultReference &&
             !string.Equals(state.KeyVaultSecretId?.TrimEnd('/'), options.KeyVaultSecretId!.ToString().TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
             return new(false, Message: "Application Gateway Key Vault secret reference does not match.");
-        var external = await tlsVerifier.VerifyAsync(options.ExternalVerificationEndpoints, bundle.Fingerprint, cancellationToken);
-        return new(external.Succeeded, external.ObservedFingerprint, external.Message);
+        return new(true, bundle.Fingerprint, "Application Gateway listener configuration was verified.");
     }
 
     public async Task<DeploymentRollbackResult> RollbackAsync(DeploymentContext context, DeploymentBackupResult backup, CancellationToken cancellationToken)

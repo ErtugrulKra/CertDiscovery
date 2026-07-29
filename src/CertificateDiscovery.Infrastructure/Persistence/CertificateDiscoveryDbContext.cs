@@ -33,6 +33,8 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
     public DbSet<CertificateDeployment> CertificateDeployments => Set<CertificateDeployment>();
     public DbSet<DeploymentJob> DeploymentJobs => Set<DeploymentJob>();
     public DbSet<DeploymentAuditEvent> DeploymentAuditEvents => Set<DeploymentAuditEvent>();
+    public DbSet<DeploymentVerificationRun> DeploymentVerificationRuns => Set<DeploymentVerificationRun>();
+    public DbSet<DeploymentEndpointVerification> DeploymentEndpointVerifications => Set<DeploymentEndpointVerification>();
     public DbSet<DeploymentAgent> DeploymentAgents => Set<DeploymentAgent>();
     public DbSet<DeploymentAgentRegistrationToken> DeploymentAgentRegistrationTokens => Set<DeploymentAgentRegistrationToken>();
     public DbSet<DeploymentAgentRegistrationExchange> DeploymentAgentRegistrationExchanges => Set<DeploymentAgentRegistrationExchange>();
@@ -316,6 +318,7 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
         {
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
             entity.Property(x => x.DeploymentWindow).HasMaxLength(160);
+            entity.Property(x => x.VerificationQuorumMode).HasConversion<string>().HasMaxLength(32);
             entity.HasIndex(x => x.Name).IsUnique();
             entity.HasIndex(x => x.IsEnabled);
         });
@@ -334,6 +337,8 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
             entity.Property(x => x.ExternalResourceReference).HasMaxLength(1024);
             entity.Property(x => x.RollbackStatus).HasMaxLength(512);
             entity.Property(x => x.VerificationStatus).HasMaxLength(512);
+            entity.Property(x => x.InternalVerificationStatus).HasMaxLength(1024);
+            entity.Property(x => x.ExternalVerificationStatus).HasMaxLength(1024);
             entity.Property(x => x.RequestedBy).HasMaxLength(160);
             entity.Property(x => x.ApprovedBy).HasMaxLength(160);
             entity.HasIndex(x => x.IdempotencyKey).IsUnique();
@@ -343,6 +348,32 @@ public sealed class CertificateDiscoveryDbContext(DbContextOptions<CertificateDi
             entity.HasOne(x => x.Certificate).WithMany().HasForeignKey(x => x.CertificateId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(x => x.DeploymentTarget).WithMany().HasForeignKey(x => x.DeploymentTargetId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(x => x.DeploymentPolicy).WithMany().HasForeignKey(x => x.DeploymentPolicyId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DeploymentVerificationRun>(entity =>
+        {
+            entity.Property(x => x.QuorumMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(32);
+            entity.Property(x => x.Summary).HasMaxLength(1024);
+            entity.HasIndex(x => new { x.CertificateDeploymentId, x.Attempt });
+            entity.HasOne(x => x.CertificateDeployment).WithMany(x => x.VerificationRuns)
+                .HasForeignKey(x => x.CertificateDeploymentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DeploymentEndpointVerification>(entity =>
+        {
+            entity.Property(x => x.Endpoint).HasMaxLength(2048).IsRequired();
+            entity.Property(x => x.ObservedAddress).HasMaxLength(128);
+            entity.Property(x => x.ExpectedFingerprint).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ObservedFingerprint).HasMaxLength(128);
+            entity.Property(x => x.Subject).HasMaxLength(1024);
+            entity.Property(x => x.Issuer).HasMaxLength(1024);
+            entity.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(32);
+            entity.Property(x => x.ErrorCode).HasMaxLength(120);
+            entity.Property(x => x.ErrorMessage).HasMaxLength(2048);
+            entity.HasIndex(x => new { x.DeploymentVerificationRunId, x.ObservedAtUtc });
+            entity.HasOne(x => x.DeploymentVerificationRun).WithMany(x => x.Endpoints)
+                .HasForeignKey(x => x.DeploymentVerificationRunId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<DeploymentJob>(entity =>
