@@ -21,7 +21,8 @@ from .models import (
     WorkerScanResult,
 )
 
-SUPPORTED_PROTOCOLS = {"HTTPS", "TLS", "SMTPS", "IMAPS", "POP3S", "LDAPS"}
+SUPPORTED_PROTOCOLS = {"HTTPS", "TLS", "SMTPS", "IMAPS", "POP3S", "LDAPS", "SMTP", "IMAP", "POP3", "LDAP"}
+STARTTLS_PROTOCOLS = {"SMTP", "IMAP", "POP3", "LDAP"}
 
 
 async def scan_asset(job_id: str, asset: WorkerAsset) -> WorkerScanResult:
@@ -35,7 +36,9 @@ async def scan_asset(job_id: str, asset: WorkerAsset) -> WorkerScanResult:
         resolved_ip = await resolve_host(asset.host)
         server_hostname = asset.sniHost or asset.host
 
-        tls_result = await connect_tls_with_chain(asset.host, asset.port, server_hostname, asset.timeoutSeconds)
+        tls_result = await connect_tls_with_chain(
+            asset.host, asset.port, server_hostname, asset.timeoutSeconds, asset.protocol.upper()
+        )
         if not tls_result.certificate_der:
             raise CertificateParseError("Peer did not provide a certificate.")
         certificate = parse_certificate(tls_result.certificate_der, tls_result.chain_der)
@@ -86,16 +89,32 @@ class TlsConnectionResult:
         self.cipher_suite = cipher_suite
 
 
-async def connect_tls_with_chain(host: str, port: int, server_hostname: str | None, timeout_seconds: int) -> TlsConnectionResult:
+async def connect_tls_with_chain(
+    host: str,
+    port: int,
+    server_hostname: str | None,
+    timeout_seconds: int,
+    protocol: str = "TLS",
+) -> TlsConnectionResult:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _connect_tls_with_chain_blocking, host, port, server_hostname, timeout_seconds)
+    return await loop.run_in_executor(
+        None, _connect_tls_with_chain_blocking, host, port, server_hostname, timeout_seconds, protocol
+    )
 
 
-def _connect_tls_with_chain_blocking(host: str, port: int, server_hostname: str | None, timeout_seconds: int) -> TlsConnectionResult:
+def _connect_tls_with_chain_blocking(
+    host: str,
+    port: int,
+    server_hostname: str | None,
+    timeout_seconds: int,
+    protocol: str = "TLS",
+) -> TlsConnectionResult:
     sock: socket.socket | None = None
     connection: SSL.Connection | None = None
     try:
         sock = socket.create_connection((host, port), timeout=timeout_seconds)
+        if protocol.upper() in STARTTLS_PROTOCOLS:
+            negotiate_starttls(sock, protocol.upper(), server_hostname or host)
         context = SSL.Context(SSL.TLS_CLIENT_METHOD)
         context.set_verify(SSL.VERIFY_NONE, lambda *_args: True)
         connection = SSL.Connection(context, sock)
@@ -130,6 +149,50 @@ def _connect_tls_with_chain_blocking(host: str, port: int, server_hostname: str 
                 sock.close()
             except Exception:
                 pass
+
+
+def negotiate_starttls(sock: socket.socket, protocol: str, client_name: str) -> None:
+    """Upgrade a plaintext application connection before the TLS handshake."""
+    reader = sock.makefile("rb")
+    try:
+        if protocol == "SMTP":
+            _expect_line(reader, (b"220",), "SMTP greeting")
+            sock.sendall(f"EHLO {client_name}\r\n".encode("idna"))
+            _read_smtp_response(reader, b"250", "SMTP EHLO")
+            sock.sendall(b"STARTTLS\r\n")
+            _expect_line(reader, (b"220",), "SMTP STARTTLS")
+        elif protocol == "IMAP":
+            _expect_line(reader, (b"* OK",), "IMAP greeting")
+            sock.sendall(b"A001 STARTTLS\r\n")
+            _expect_line(reader, (b"A001 OK",), "IMAP STARTTLS")
+        elif protocol == "POP3":
+            _expect_line(reader, (b"+OK",), "POP3 greeting")
+            sock.sendall(b"STLS\r\n")
+            _expect_line(reader, (b"+OK",), "POP3 STLS")
+        elif protocol == "LDAP":
+            # LDAPMessage(messageID=1, extendedReq(1.3.6.1.4.1.1466.20037))
+            sock.sendall(bytes.fromhex("301d02010177188016312e332e362e312e342e312e313436362e3230303337"))
+            response = sock.recv(4096)
+            if b"\x0a\x01\x00" not in response:
+                raise StartTlsNegotiationError("LDAP StartTLS request was rejected.")
+        else:
+            raise UnsupportedProtocolError(f"Unsupported STARTTLS protocol: {protocol}")
+    finally:
+        reader.close()
+
+
+def _expect_line(reader: object, prefixes: tuple[bytes, ...], stage: str) -> bytes:
+    line = reader.readline(65536)
+    if not line or not any(line.upper().startswith(prefix) for prefix in prefixes):
+        detail = line.decode("utf-8", errors="replace").strip()
+        raise StartTlsNegotiationError(f"{stage} failed: {detail or 'connection closed'}")
+    return line
+
+
+def _read_smtp_response(reader: object, expected_code: bytes, stage: str) -> None:
+    line = _expect_line(reader, (expected_code,), stage)
+    while len(line) >= 4 and line[3:4] == b"-":
+        line = _expect_line(reader, (expected_code,), stage)
 
 
 def parse_certificate(cert_bytes: bytes, chain_der: list[bytes] | None = None) -> WorkerCertificate:
@@ -242,6 +305,8 @@ def map_error(exc: Exception) -> ScanErrorType:
         return ScanErrorType.connection_refused
     if isinstance(exc, (ssl.SSLError, SSL.Error)):
         return ScanErrorType.tls_handshake_failed
+    if isinstance(exc, StartTlsNegotiationError):
+        return ScanErrorType.tls_handshake_failed
     if isinstance(exc, CertificateParseError):
         return ScanErrorType.certificate_parse_failed
     return ScanErrorType.internal_error
@@ -256,4 +321,8 @@ class CertificateParseError(Exception):
 
 
 class UnsupportedProtocolError(Exception):
+    pass
+
+
+class StartTlsNegotiationError(Exception):
     pass
