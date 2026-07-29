@@ -114,16 +114,7 @@ public sealed class AwsAcmCertificateDeployer(
         var observed = await acm.GetFingerprintAsync(options, context.Secret, arn, cancellationToken);
         if (!string.Equals(observed, bundle.Fingerprint, StringComparison.OrdinalIgnoreCase))
             return new(false, observed, "AWS ACM returned a different certificate fingerprint.");
-        if (options.ExternalVerificationEndpoints.Count > 0)
-        {
-            var external = await tlsVerifier.VerifyAsync(
-                options.ExternalVerificationEndpoints,
-                bundle.Fingerprint,
-                cancellationToken);
-            if (!external.Succeeded)
-                return new(false, external.ObservedFingerprint, external.Message);
-        }
-        return new(true, observed, $"AWS ACM certificate '{arn}' and configured TLS endpoints were verified.");
+        return new(true, observed, $"AWS ACM certificate '{arn}' internal state was verified.");
     }
 
     public async Task<DeploymentRollbackResult> RollbackAsync(

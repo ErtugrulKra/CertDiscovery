@@ -29,7 +29,20 @@ public sealed class DeploymentService(
         var events = await db.DeploymentAuditEvents.AsNoTracking().Where(x => x.CertificateDeploymentId == id)
             .OrderBy(x => x.CreatedAtUtc).Select(x => new DeploymentAuditEventDto(x.EventType, x.Actor, x.Message, x.Status, x.CreatedAtUtc, x.DurationMilliseconds))
             .ToListAsync(cancellationToken);
-        return new(ToDto(item), events);
+        var runs = await db.DeploymentVerificationRuns.AsNoTracking()
+            .Where(x => x.CertificateDeploymentId == id)
+            .Include(x => x.Endpoints)
+            .OrderBy(x => x.StartedAtUtc)
+            .Select(x => new DeploymentVerificationRunDto(
+                x.Id, x.Attempt, x.IsRollbackVerification, x.QuorumMode,
+                x.TotalNodes, x.SuccessfulNodes, x.FailedNodes, x.DistinctFingerprints,
+                x.Outcome, x.Summary, x.StartedAtUtc, x.CompletedAtUtc,
+                x.Endpoints.OrderBy(e => e.ObservedAtUtc).Select(e => new DeploymentEndpointVerificationDto(
+                    e.Endpoint, e.ObservedAddress, e.ObservedFingerprint, e.Outcome,
+                    e.SanMatches, e.TimeValid, e.ChainValid, e.NotAfterUtc,
+                    e.ErrorCode, e.ErrorMessage, e.DurationMilliseconds)).ToList()))
+            .ToListAsync(cancellationToken);
+        return new(ToDto(item), events, runs);
     }
 
     public async Task CreateTargetAsync(DeploymentTargetUpsertRequest request, CancellationToken cancellationToken)
@@ -113,11 +126,21 @@ public sealed class DeploymentService(
     {
         if (string.IsNullOrWhiteSpace(request.Name)) throw new ArgumentException("Policy name is required.");
         if (request.MaxAttempts is < 1 or > 20) throw new ArgumentException("Max attempts must be between 1 and 20.");
+        if (request.VerificationQuorumPercentage is < 1 or > 100) throw new ArgumentException("Verification quorum percentage must be between 1 and 100.");
+        if (request.VerificationMinimumSuccessfulNodes is < 1 or > 100) throw new ArgumentException("Minimum successful nodes must be between 1 and 100.");
+        if (request.VerificationAttempts is < 1 or > 20) throw new ArgumentException("Verification attempts must be between 1 and 20.");
+        if (request.VerificationIntervalSeconds is < 0 or > 300) throw new ArgumentException("Verification interval must be between 0 and 300 seconds.");
         db.DeploymentPolicies.Add(new DeploymentPolicy
         {
             Name = request.Name.Trim(), RequireApproval = request.RequireApproval, AutomaticDeployment = request.AutomaticDeployment,
             MaxAttempts = request.MaxAttempts, RetryDelaySeconds = request.RetryDelaySeconds,
             RollbackOnFailure = request.RollbackOnFailure, VerificationTimeoutSeconds = request.VerificationTimeoutSeconds,
+            VerificationQuorumMode = request.VerificationQuorumMode,
+            VerificationQuorumPercentage = request.VerificationQuorumPercentage,
+            VerificationMinimumSuccessfulNodes = request.VerificationMinimumSuccessfulNodes,
+            VerificationAttempts = request.VerificationAttempts,
+            VerificationIntervalSeconds = request.VerificationIntervalSeconds,
+            RollbackOnPartialVerification = request.RollbackOnPartialVerification,
             DeploymentWindow = Normalize(request.DeploymentWindow), IsEnabled = request.IsEnabled
         });
         await db.SaveChangesAsync(cancellationToken);
@@ -180,12 +203,15 @@ public sealed class DeploymentService(
         x.CertificateRequest.Domain, x.CertificateId, x.DeploymentTargetId, x.DeploymentTarget.Name, x.DeploymentPolicyId,
         x.DeploymentPolicy.Name, x.Status, x.Origin, x.Attempt, x.ExpectedFingerprint, x.ObservedFingerprint,
         x.ErrorCode, x.ErrorMessage, x.BackupReference, x.RollbackStatus, x.VerificationStatus, x.RequestedBy,
-        x.ApprovedBy, x.CreatedAtUtc, x.StartedAtUtc, x.CompletedAtUtc, x.ExternalResourceReference);
+        x.ApprovedBy, x.CreatedAtUtc, x.StartedAtUtc, x.CompletedAtUtc, x.ExternalResourceReference,
+        x.InternalVerificationStatus, x.ExternalVerificationStatus);
     private static DeploymentTargetDto ToDto(DeploymentTarget x) => new(x.Id, x.Name, x.TargetType, x.AssetId, x.ConfigurationJson,
         !string.IsNullOrWhiteSpace(x.SecretReference), x.IsEnabled, x.CreatedAtUtc, x.UpdatedAtUtc,
         x.DeploymentAgentId, x.DeploymentAgent == null ? null : $"{x.DeploymentAgent.Name} ({x.DeploymentAgent.MachineName})");
     private static DeploymentPolicyDto ToDto(DeploymentPolicy x) => new(x.Id, x.Name, x.RequireApproval, x.AutomaticDeployment,
-        x.MaxAttempts, x.RetryDelaySeconds, x.RollbackOnFailure, x.VerificationTimeoutSeconds, x.DeploymentWindow, x.IsEnabled);
+        x.MaxAttempts, x.RetryDelaySeconds, x.RollbackOnFailure, x.VerificationTimeoutSeconds, x.DeploymentWindow, x.IsEnabled,
+        x.VerificationQuorumMode, x.VerificationQuorumPercentage, x.VerificationMinimumSuccessfulNodes,
+        x.VerificationAttempts, x.VerificationIntervalSeconds, x.RollbackOnPartialVerification);
     private static void ValidateTargetConfiguration(DeploymentTargetUpsertRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name)) throw new ArgumentException("Target name is required.");

@@ -132,8 +132,18 @@ public sealed class CertificateDeploymentOrchestrator(
     IDeploymentStateMachine stateMachine,
     IDeploymentQueue queue,
     ISecretProvider secrets,
-    IDeploymentCertificateBundleSource bundleSource) : ICertificateDeploymentOrchestrator
+    IDeploymentCertificateBundleSource bundleSource,
+    IMultiNodeTlsVerifier multiNodeVerifier) : ICertificateDeploymentOrchestrator
 {
+    public CertificateDeploymentOrchestrator(
+        CertificateDiscoveryDbContext db,
+        ICertificateDeployerResolver resolver,
+        IDeploymentStateMachine stateMachine,
+        IDeploymentQueue queue,
+        ISecretProvider secrets,
+        IDeploymentCertificateBundleSource bundleSource)
+        : this(db, resolver, stateMachine, queue, secrets, bundleSource, new TlsEndpointVerifier()) { }
+
     public async Task<Guid> CreateAsync(Guid requestId, Guid targetId, Guid policyId, string actor, DeploymentOrigin origin, CancellationToken cancellationToken)
     {
         var request = await db.AcmeCertificateRequests.Include(x => x.Certificate).FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken)
@@ -236,9 +246,58 @@ public sealed class CertificateDeploymentOrchestrator(
             verificationTimeout.CancelAfter(TimeSpan.FromSeconds(deployment.DeploymentPolicy.VerificationTimeoutSeconds));
             var verification = await deployer.VerifyAsync(context, bundle, verificationTimeout.Token);
             deployment.ObservedFingerprint = verification.ObservedFingerprint;
-            deployment.VerificationStatus = verification.Message ?? (verification.Succeeded ? "Verified" : "Failed");
+            deployment.InternalVerificationStatus = verification.Message ?? (verification.Succeeded ? "Verified" : "Failed");
             Ensure(verification.Succeeded && string.Equals(verification.ObservedFingerprint, bundle.Fingerprint, StringComparison.OrdinalIgnoreCase),
                 "VerificationFailed", verification.Message ?? "Observed fingerprint does not match the expected certificate.");
+            var endpoints = DeploymentVerificationEndpoints.Parse(deployment.DeploymentTarget);
+            if (endpoints.Count > 0)
+            {
+                var started = DateTime.UtcNow;
+                var external = await multiNodeVerifier.VerifyAsync(
+                    endpoints, bundle.Fingerprint, deployment.DeploymentPolicy, verificationTimeout.Token);
+                var run = new DeploymentVerificationRun
+                {
+                    CertificateDeploymentId = deployment.Id,
+                    Attempt = deployment.Attempt,
+                    QuorumMode = deployment.DeploymentPolicy.VerificationQuorumMode,
+                    QuorumPercentage = deployment.DeploymentPolicy.VerificationQuorumPercentage,
+                    MinimumSuccessfulNodes = deployment.DeploymentPolicy.VerificationMinimumSuccessfulNodes,
+                    TotalNodes = external.Quorum.TotalNodes,
+                    SuccessfulNodes = external.Quorum.SuccessfulNodes,
+                    FailedNodes = external.Quorum.TotalNodes - external.Quorum.SuccessfulNodes,
+                    DistinctFingerprints = external.Quorum.DistinctFingerprints,
+                    Outcome = external.Quorum.Outcome,
+                    Summary = external.Quorum.Message,
+                    StartedAtUtc = started,
+                    CompletedAtUtc = DateTime.UtcNow,
+                    DurationMilliseconds = (long)(DateTime.UtcNow - started).TotalMilliseconds,
+                    Endpoints = external.Endpoints.ToList()
+                };
+                db.DeploymentVerificationRuns.Add(run);
+                deployment.ExternalVerificationStatus = external.Quorum.Message;
+                deployment.VerificationStatus = $"Internal: {deployment.InternalVerificationStatus} External: {external.Quorum.Message}";
+                deployment.ObservedFingerprint = external.Endpoints.LastOrDefault()?.ObservedFingerprint;
+                await db.SaveChangesAsync(cancellationToken);
+                if (external.Quorum.Outcome == DeploymentVerificationOutcome.PartiallyVerified &&
+                    !deployment.DeploymentPolicy.RollbackOnPartialVerification)
+                {
+                    stateMachine.Transition(deployment, CertificateDeploymentStatus.PartiallyVerified);
+                    deployment.CompletedAtUtc = DateTime.UtcNow;
+                    Audit(deployment, "PartiallyVerified", actor, external.Quorum.Message);
+                    await db.SaveChangesAsync(cancellationToken);
+                    return;
+                }
+                Ensure(external.Quorum.Outcome == DeploymentVerificationOutcome.Verified,
+                    external.Quorum.Outcome == DeploymentVerificationOutcome.PartiallyVerified
+                        ? "PartialRolloutDetected"
+                        : "VerificationQuorumFailed",
+                    external.Quorum.Message);
+            }
+            else
+            {
+                deployment.ExternalVerificationStatus = "No external verification endpoints configured.";
+                deployment.VerificationStatus = deployment.InternalVerificationStatus;
+            }
             stateMachine.Transition(deployment, CertificateDeploymentStatus.Succeeded);
             deployment.CompletedAtUtc = DateTime.UtcNow;
             deployment.ErrorCode = deployment.ErrorMessage = null;
@@ -278,6 +337,40 @@ public sealed class CertificateDeploymentOrchestrator(
         Audit(deployment, "RollingBack", actor, "Rollback started.");
         await db.SaveChangesAsync(cancellationToken);
         var result = await deployer.RollbackAsync(context, backup, cancellationToken);
+        var rollbackFingerprint = result.ObservedFingerprint ?? deployment.PreviousFingerprint;
+        var endpoints = DeploymentVerificationEndpoints.Parse(deployment.DeploymentTarget);
+        if (result.Succeeded && !string.IsNullOrWhiteSpace(rollbackFingerprint) && endpoints.Count > 0)
+        {
+            var started = DateTime.UtcNow;
+            var external = await multiNodeVerifier.VerifyAsync(
+                endpoints, rollbackFingerprint, deployment.DeploymentPolicy, cancellationToken);
+            db.DeploymentVerificationRuns.Add(new DeploymentVerificationRun
+            {
+                CertificateDeploymentId = deployment.Id,
+                Attempt = deployment.Attempt,
+                IsRollbackVerification = true,
+                QuorumMode = deployment.DeploymentPolicy.VerificationQuorumMode,
+                QuorumPercentage = deployment.DeploymentPolicy.VerificationQuorumPercentage,
+                MinimumSuccessfulNodes = deployment.DeploymentPolicy.VerificationMinimumSuccessfulNodes,
+                TotalNodes = external.Quorum.TotalNodes,
+                SuccessfulNodes = external.Quorum.SuccessfulNodes,
+                FailedNodes = external.Quorum.TotalNodes - external.Quorum.SuccessfulNodes,
+                DistinctFingerprints = external.Quorum.DistinctFingerprints,
+                Outcome = external.Quorum.Outcome,
+                Summary = external.Quorum.Message,
+                StartedAtUtc = started,
+                CompletedAtUtc = DateTime.UtcNow,
+                DurationMilliseconds = (long)(DateTime.UtcNow - started).TotalMilliseconds,
+                Endpoints = external.Endpoints.ToList()
+            });
+            if (external.Quorum.Outcome != DeploymentVerificationOutcome.Verified)
+                result = result with
+                {
+                    Succeeded = false,
+                    ObservedFingerprint = external.Endpoints.LastOrDefault()?.ObservedFingerprint,
+                    Message = $"Rollback target changed, but external verification failed: {external.Quorum.Message}"
+                };
+        }
         stateMachine.Transition(deployment, result.Succeeded ? CertificateDeploymentStatus.RolledBack : CertificateDeploymentStatus.RollbackFailed);
         deployment.RollbackStatus = result.Message ?? deployment.Status.ToString();
         deployment.ObservedFingerprint = result.ObservedFingerprint;

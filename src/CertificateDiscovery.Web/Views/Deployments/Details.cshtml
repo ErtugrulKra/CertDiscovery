@@ -3,11 +3,27 @@
 @{ ViewData["Title"] = "Deployment details"; var d = Model.Deployment; }
 <div class="page-heading"><div><h2>@d.Domain → @d.TargetName</h2><p>@d.Status · attempt @d.Attempt</p></div><a class="btn btn-outline-secondary" asp-action="Index">Back</a></div>
 @if (TempData["DeploymentMessage"] is string message) { <div class="alert alert-success">@message</div> } @if (TempData["DeploymentError"] is string error) { <div class="alert alert-danger">@error</div> }
-<section class="panel"><dl class="row"><dt class="col-sm-3">Expected fingerprint</dt><dd class="col-sm-9"><code>@d.ExpectedFingerprint</code></dd><dt class="col-sm-3">Observed fingerprint</dt><dd class="col-sm-9"><code>@(d.ObservedFingerprint ?? "-")</code></dd><dt class="col-sm-3">Target resource/version</dt><dd class="col-sm-9"><code>@(d.ExternalResourceReference ?? "-")</code></dd><dt class="col-sm-3">Verification</dt><dd class="col-sm-9">@d.VerificationStatus</dd><dt class="col-sm-3">Error</dt><dd class="col-sm-9">@d.ErrorCode @d.ErrorMessage</dd><dt class="col-sm-3">Backup</dt><dd class="col-sm-9">@d.BackupReference</dd></dl>
+<section class="panel"><dl class="row"><dt class="col-sm-3">Expected fingerprint</dt><dd class="col-sm-9"><code>@d.ExpectedFingerprint</code></dd><dt class="col-sm-3">Observed fingerprint</dt><dd class="col-sm-9"><code>@(d.ObservedFingerprint ?? "-")</code></dd><dt class="col-sm-3">Target resource/version</dt><dd class="col-sm-9"><code>@(d.ExternalResourceReference ?? "-")</code></dd><dt class="col-sm-3">Internal verification</dt><dd class="col-sm-9">@(d.InternalVerificationStatus ?? "-")</dd><dt class="col-sm-3">External verification</dt><dd class="col-sm-9">@(d.ExternalVerificationStatus ?? "-")</dd><dt class="col-sm-3">Error</dt><dd class="col-sm-9">@d.ErrorCode @d.ErrorMessage</dd><dt class="col-sm-3">Backup</dt><dd class="col-sm-9">@d.BackupReference</dd></dl>
 <div>
 @if (d.Status == CertificateDeploymentStatus.AwaitingApproval) { <form class="d-inline" method="post" asp-action="Approve" asp-route-id="@d.Id"><button class="btn btn-success">Approve</button></form> <form class="d-inline" method="post" asp-action="Reject" asp-route-id="@d.Id"><button class="btn btn-danger">Reject</button></form> }
 @if (d.Status is CertificateDeploymentStatus.Failed or CertificateDeploymentStatus.RollbackFailed) { <form class="d-inline" method="post" asp-action="Retry" asp-route-id="@d.Id"><button class="btn btn-primary">Retry</button></form> }
 @if (d.BackupReference is not null && d.Status is CertificateDeploymentStatus.Succeeded or CertificateDeploymentStatus.Failed or CertificateDeploymentStatus.RollbackFailed) { <form class="d-inline" method="post" asp-action="Rollback" asp-route-id="@d.Id"><button class="btn btn-warning">Rollback</button></form> }
 @if (d.Status is CertificateDeploymentStatus.Pending or CertificateDeploymentStatus.AwaitingApproval) { <form class="d-inline" method="post" asp-action="Cancel" asp-route-id="@d.Id"><button class="btn btn-outline-danger">Cancel</button></form> }
 </div></section>
+@if (Model.VerificationRuns is { Count: > 0 })
+{
+<section class="panel"><div class="panel-header"><h2>Endpoint verification</h2></div>
+@foreach (var run in Model.VerificationRuns)
+{
+<h3 class="h6">Attempt @run.Attempt · @run.Outcome · @run.SuccessfulNodes/@run.TotalNodes successful</h3>
+<p class="text-muted">@run.Summary</p>
+<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Endpoint / node</th><th>Fingerprint</th><th>Result</th><th>SAN</th><th>Time</th><th>Chain</th><th>Duration</th></tr></thead><tbody>
+@foreach (var endpoint in run.Endpoints)
+{
+<tr><td>@endpoint.Endpoint<br/><small>@endpoint.ObservedAddress</small></td><td><code>@(endpoint.ObservedFingerprint ?? "-")</code></td><td>@endpoint.Outcome<br/><small>@endpoint.ErrorCode @endpoint.ErrorMessage</small></td><td>@(endpoint.SanMatches ? "Valid" : "Invalid")</td><td>@(endpoint.TimeValid ? "Valid" : "Invalid")</td><td>@(endpoint.ChainValid ? "Valid" : "Invalid")</td><td>@endpoint.DurationMilliseconds ms</td></tr>
+}
+</tbody></table></div>
+}
+</section>
+}
 <section class="panel"><div class="panel-header"><h2>Audit timeline</h2></div><table class="table table-sm"><thead><tr><th>Time</th><th>Event</th><th>Status</th><th>Actor</th><th>Message</th></tr></thead><tbody>@foreach(var e in Model.Events){<tr><td>@e.CreatedAtUtc.ToLocalTime().ToString("g")</td><td>@e.EventType</td><td>@e.Status</td><td>@e.Actor</td><td>@e.Message</td></tr>}</tbody></table></section>
